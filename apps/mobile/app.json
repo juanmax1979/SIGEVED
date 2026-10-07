@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Espejo",
+    "slug": "espejo",
+    "scheme": "espejo",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Espejo usa la cámara para fotografiar evidencia y para leer el código de la estación.",
+          "microphonePermission": "Espejo usa el micrófono solo cuando grabás un video como evidencia.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Espejo accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
+          "cameraPermission": "Espejo usa la cámara para fotografiar o filmar evidencia que vos decidas guardar.",
+          "microphonePermission": "Espejo usa el micrófono solo cuando grabás un video como evidencia."
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.espejo.pjch",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "app.espejo.pjch",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#17352F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

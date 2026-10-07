@@ -1,0 +1,17 @@
+{
+  "name": "espejo-pjch",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Estación local y app móvil para recibir evidencia digital en investigaciones penales.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "admin": "npm run dev --workspace @espejo/admin",
+    "admin:start": "npm run start --workspace @espejo/admin",
+    "mobile": "npm run start --workspace espejo-mobile",
+    "build": "npm run build --workspace @espejo/admin",
+    "typecheck": "npm run typecheck --workspace @espejo/admin --workspace espejo-mobile"
+  }
+}

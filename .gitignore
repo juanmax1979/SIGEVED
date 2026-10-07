@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.expo/
+apps/admin/data/
+apps/admin/dist/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
+*.tsbuildinfo
+admin-token.txt
