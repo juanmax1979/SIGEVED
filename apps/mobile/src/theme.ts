@@ -1,11 +1,15 @@
+export const institutionTitle = "Poder Judicial del Chaco";
+
 export const theme = {
-  paper: "#f4efe6",
-  card: "#fffaf3",
-  ink: "#1b2420",
-  muted: "#5d675f",
-  line: "#e3d8c6",
-  pine: "#17352f",
-  brass: "#9a7040",
-  danger: "#8d3b32",
-  ok: "#1f6b45",
+  paper: "#f4f7fb",
+  card: "#ffffff",
+  soft: "#e7eef6",
+  ink: "#12263a",
+  muted: "#66788a",
+  line: "#d9e3ee",
+  pine: "#1a4f8a",
+  blue: "#1a4f8a",
+  brass: "#1a4f8a",
+  danger: "#9b3b32",
+  ok: "#1f7a45",
 };

@@ -25,6 +25,8 @@ export type CaseRecord = {
   expediente: string;
   tipo: CaseType;
   dependencia: string;
+  oficina: string;
+  proceso: string;
   responsable: string;
   notas: string;
   createdAt: string;
@@ -87,7 +89,7 @@ export type EvidenceRecord = {
   receivedAt: string;
   category: EvidenceCategory;
   note: string;
-  source: CatalogItem["source"];
+  source: "camera" | "gallery" | "document" | "pantalla";
   deviceId: string;
   deviceName: string;
   contributorName: string;
@@ -108,6 +110,30 @@ export function labelCaseType(tipo: CaseType): string {
 
 export function labelCategory(category: EvidenceCategory): string {
   return EVIDENCE_CATEGORIES.find((item) => item.id === category)?.label ?? category;
+}
+
+export const FINGERPRINT_PATHS = [
+  "M32 7c9.5 0 17 8 17 19v8",
+  "M15 30c0-11 7.5-21 17-23",
+  "M21 32c0-7 4.8-14 11-14s11 6 11 15c0 9-2 16-6 22",
+  "M27 33c0-3.5 2.2-7 5-7s5 3.2 5 9c0 8-1.2 15-4.2 21",
+  "M32 31.5c0 8 0 16-.4 24",
+  "M18 42c2.2 7 6.4 13 14 17",
+  "M46 38c.4 8-3.2 16-9.5 22",
+  "M24 24c2-6 8-8 12-4",
+] as const;
+
+export function mismaDependencia(a: string, b: string): boolean {
+  const clave = (value: string) =>
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/[º°]/g, "")
+      .replace(/[^A-Z0-9]/g, "");
+  const left = clave(a);
+  const right = clave(b);
+  return left.length > 0 && left === right;
 }
 
 export function formatBytes(size: number): string {

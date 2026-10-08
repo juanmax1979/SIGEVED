@@ -40,7 +40,7 @@ export default function SessionScreen() {
         La estación puede descargar los archivos de esta lista. También podés enviarlos vos. Si cerrás la conexión, no sale nada más.
       </Text>
       {store.busy ? <Text style={styles.busy}>{store.busy}</Text> : null}
-      {store.items.length === 0 ? <Text style={styles.lead}>Todavía no hay archivos en Espejo.</Text> : null}
+      {store.items.length === 0 ? <Text style={styles.lead}>Todavía no hay archivos en EVIDIA.</Text> : null}
       {store.items.map((item) => (
         <View key={item.localId} style={styles.card}>
           <Text style={styles.filename}>{item.filename}</Text>

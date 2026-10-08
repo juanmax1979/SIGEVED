@@ -78,7 +78,7 @@ export default function ConnectScreen() {
   return (
     <View style={styles.screen}>
       <Text style={styles.lead}>
-        La estación solo recibe los archivos que están en Espejo y que se envían durante esta conexión. Podés cortarla cuando quieras.
+        La estación solo recibe los archivos que están en EVIDIA y que se envían durante esta conexión. Podés cortarla cuando quieras.
       </Text>
       <Text style={styles.label}>Cómo querés figurar, si querés</Text>
       <TextInput

@@ -13,7 +13,8 @@ import {
 } from "react-native";
 import { formatBytes } from "../../../../packages/shared/src/index";
 import { useStore, type LocalEvidence } from "../lib/store";
-import { theme } from "../theme";
+import { institutionTitle, theme } from "../theme";
+import { Logo } from "../components/Logo";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -90,8 +91,14 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      <View style={styles.brandBlock}>
+        <Logo size={64} />
+        <Text style={styles.brandName}>EVIDIA</Text>
+      </View>
+      <Text style={styles.system}>Sistema de Extracción y Verificación de Evidencia Digital</Text>
+      <Text style={styles.institution}>{institutionTitle}</Text>
       <Text style={styles.lead}>
-        Las fotos, videos y documentos quedan en este teléfono hasta que los envíes a la estación. Nada se comparte solo.
+        Las fotos, videos y documentos quedan en este teléfono hasta que los envíes a la estación. Nada se comparte solo. Si conectan el cable USB, la computadora mira la pantalla y guarda esas capturas.
       </Text>
       <View style={styles.actions}>
         <Pressable style={styles.action} onPress={takePhoto}>
@@ -154,6 +161,10 @@ function normalizePicked(picked: unknown): File[] {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, padding: 18, gap: 12 },
+  brandBlock: { alignItems: "center", gap: 4, paddingTop: 8 },
+  brandName: { color: theme.ink, fontSize: 28, fontWeight: "800", letterSpacing: 3 },
+  system: { color: theme.muted, fontSize: 15, lineHeight: 21, textAlign: "center" },
+  institution: { color: theme.blue, fontSize: 14, fontWeight: "700", textAlign: "center" },
   lead: { color: theme.muted, fontSize: 16, lineHeight: 22 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   action: {

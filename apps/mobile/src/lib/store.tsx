@@ -370,7 +370,7 @@ export const categories = EVIDENCE_CATEGORIES;
 export function parsePairPayload(raw: string): PairPayload {
   const parsed = JSON.parse(raw) as PairPayload;
   if (parsed.v !== 1 || !parsed.host?.startsWith("http") || !parsed.token) {
-    throw new Error("Ese código no es de una estación Espejo.");
+    throw new Error("Ese código no es de una estación EVIDIA.");
   }
   return parsed;
 }

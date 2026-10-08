@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type {
   CaseRecord,
@@ -10,6 +10,14 @@ import type {
 } from "@espejo/shared";
 import { dataDir, dbPath, ensureDataDirs, filesDir } from "./paths.js";
 
+export type OperatorSession = {
+  username: string;
+  nombre: string;
+  dni: string;
+  oficinaId: string;
+  oficinaNombre: string;
+};
+
 export type Database = {
   adminToken: string;
   cases: CaseRecord[];
@@ -17,6 +25,8 @@ export type Database = {
   evidence: EvidenceRecord[];
   pulls: PullRequest[];
   catalogs: Record<string, CatalogItem[]>;
+  operator: OperatorSession | null;
+  vinculos: Record<string, string>;
 };
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -29,6 +39,8 @@ function emptyDb(): Database {
     evidence: [],
     pulls: [],
     catalogs: {},
+    operator: null,
+    vinculos: {},
   };
 }
 
@@ -45,6 +57,13 @@ function readDb(): Database {
     ...parsed,
     catalogs: parsed.catalogs ?? {},
     pulls: parsed.pulls ?? [],
+    operator: parsed.operator ?? null,
+    vinculos: parsed.vinculos ?? {},
+    cases: (parsed.cases ?? []).map((item) => ({
+      ...item,
+      oficina: item.oficina ?? "",
+      proceso: item.proceso ?? "",
+    })),
   };
 }
 
@@ -73,6 +92,49 @@ export function readSnapshot(): Database {
 
 export function getAdminToken(): string {
   return readDb().adminToken;
+}
+
+export function getOperator(): OperatorSession | null {
+  return readDb().operator;
+}
+
+export function setOperator(operator: OperatorSession): Promise<OperatorSession> {
+  return mutate((db) => {
+    db.operator = operator;
+    const dni = operator.dni.replace(/\D/g, "");
+    if (operator.username && dni) db.vinculos[operator.username.toLowerCase()] = dni;
+    return operator;
+  });
+}
+
+export function getVinculo(username: string): string {
+  return readDb().vinculos[username.toLowerCase()] ?? "";
+}
+
+export function setVinculo(username: string, dni: string): Promise<void> {
+  return mutate((db) => {
+    const digits = dni.replace(/\D/g, "");
+    if (username && digits) db.vinculos[username.toLowerCase()] = digits;
+  });
+}
+
+export function dniDelUsuario(input: {
+  windowsUser: string;
+  requested: string;
+  vinculo: string;
+  operator: { username: string; dni: string } | null;
+  configured: string;
+}): string {
+  const requested = input.requested.replace(/\D/g, "");
+  if (requested) return requested;
+  const key = input.windowsUser.toLowerCase();
+  const linked = input.vinculo.replace(/\D/g, "");
+  if (linked) return linked;
+  if (input.operator && input.operator.username.toLowerCase() === key) {
+    const dni = input.operator.dni.replace(/\D/g, "");
+    if (dni) return dni;
+  }
+  return input.configured.replace(/\D/g, "");
 }
 
 export function createCase(
@@ -332,6 +394,60 @@ export function markPullFailed(token: string, localId: string, error: string): P
     pull.status = "failed";
     pull.error = error;
     pull.finishedAt = new Date().toISOString();
+  });
+}
+
+export function saveStationCapture(input: {
+  caseId: string;
+  filename: string;
+  mime: string;
+  sha256: string;
+  size: number;
+  category: EvidenceRecord["category"];
+  note: string;
+  deviceId: string;
+  deviceName: string;
+  tempPath: string;
+}): Promise<EvidenceRecord | undefined> {
+  return mutate((db) => {
+    const cause = db.cases.find((item) => item.id === input.caseId);
+    if (!cause) return undefined;
+    const id = randomUUID();
+    const storedName = `${id}-${safeFilename(input.filename)}`;
+    const folder = path.join(filesDir, input.caseId);
+    mkdirSync(folder, { recursive: true });
+    const finalPath = path.join(folder, storedName);
+    try {
+      renameSync(input.tempPath, finalPath);
+    } catch {
+      copyFileSync(input.tempPath, finalPath);
+      rmSync(input.tempPath, { force: true });
+    }
+    const now = new Date().toISOString();
+    const record: EvidenceRecord = {
+      id,
+      caseId: input.caseId,
+      sessionId: "usb",
+      localId: id,
+      filename: safeFilename(input.filename),
+      mime: input.mime,
+      size: input.size,
+      sha256: input.sha256,
+      claimedSha256: input.sha256,
+      sha256Verified: true,
+      capturedAt: now,
+      receivedAt: now,
+      category: input.category,
+      note: input.note,
+      source: "pantalla",
+      deviceId: input.deviceId,
+      deviceName: input.deviceName,
+      contributorName: "",
+      storedName,
+    };
+    db.evidence.unshift(record);
+    cause.updatedAt = now;
+    return record;
   });
 }
 

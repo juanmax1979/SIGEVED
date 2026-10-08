@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Espejo",
+    "name": "EVIDIA",
     "slug": "espejo",
     "scheme": "espejo",
     "version": "0.1.0",
@@ -12,17 +12,17 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Espejo usa la cámara para fotografiar evidencia y para leer el código de la estación.",
-          "microphonePermission": "Espejo usa el micrófono solo cuando grabás un video como evidencia.",
+          "cameraPermission": "EVIDIA usa la cámara para fotografiar evidencia y para leer el código de la estación.",
+          "microphonePermission": "EVIDIA usa el micrófono solo cuando grabás un video como evidencia.",
           "recordAudioAndroid": true
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Espejo accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
-          "cameraPermission": "Espejo usa la cámara para fotografiar o filmar evidencia que vos decidas guardar.",
-          "microphonePermission": "Espejo usa el micrófono solo cuando grabás un video como evidencia."
+          "photosPermission": "EVIDIA accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
+          "cameraPermission": "EVIDIA usa la cámara para fotografiar o filmar evidencia que vos decidas guardar.",
+          "microphonePermission": "EVIDIA usa el micrófono solo cuando grabás un video como evidencia."
         }
       ]
     ],

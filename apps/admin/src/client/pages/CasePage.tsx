@@ -2,13 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   formatBytes,
-  labelCaseType,
   labelCategory,
   type CaseRecord,
   type EvidenceRecord,
   type PairingSession,
 } from "@espejo/shared";
 import { api } from "../api";
+import { UsbPanel } from "./UsbPanel";
 
 export function CasePage() {
   const { id = "" } = useParams();
@@ -19,8 +19,10 @@ export function CasePage() {
   const [hosts, setHosts] = useState<{ address: string; name: string; preferred: boolean }[]>([]);
   const [host, setHost] = useState("");
   const [error, setError] = useState("");
+  const [packageHash, setPackageHash] = useState("");
+  const [packing, setPacking] = useState(false);
 
-  useEffect(() => {
+  function reload() {
     api<{ cause: CaseRecord; evidence: EvidenceRecord[]; sessions: PairingSession[] }>(`/api/cases/${id}`)
       .then((data) => {
         setCause(data.cause);
@@ -28,6 +30,10 @@ export function CasePage() {
         setSessions(data.sessions);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo abrir la causa."));
+  }
+
+  useEffect(() => {
+    reload();
     api<{ hosts: { address: string; name: string; preferred: boolean }[] }>("/api/bootstrap")
       .then((data) => {
         setHosts(data.hosts);
@@ -49,6 +55,19 @@ export function CasePage() {
     }
   }
 
+  async function pack() {
+    setPacking(true);
+    setError("");
+    try {
+      const data = await api<{ sha256: string }>(`/api/cases/${id}/package`, { method: "POST" });
+      setPackageHash(data.sha256);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo armar el paquete.");
+    } finally {
+      setPacking(false);
+    }
+  }
+
   if (!cause && !error) return <p className="meta">Cargando causa…</p>;
   if (!cause) return <p className="error">{error}</p>;
 
@@ -56,11 +75,12 @@ export function CasePage() {
     <>
       <div className="top">
         <div>
-          <div className="kicker">{labelCaseType(cause.tipo)}</div>
+          {cause.proceso ? <div className="kicker">{cause.proceso}</div> : null}
           <h1>{cause.caratula}</h1>
           <p className="lede">
             {cause.expediente || "Sin número de expediente"}
             {cause.dependencia ? ` · ${cause.dependencia}` : ""}
+            {cause.oficina ? ` · Carga en ${cause.oficina}` : ""}
             {cause.responsable ? ` · Recepción: ${cause.responsable}` : ""}
           </p>
         </div>
@@ -97,14 +117,26 @@ export function CasePage() {
           </p>
         ) : null}
       </section>
+      <UsbPanel caseId={id} onSaved={reload} />
       <section className="panel">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h2>Archivos recibidos</h2>
-          <a className="btn-ghost" href={`/api/cases/${id}/export`}>
-            Exportar paquete
-          </a>
+          <button className="btn-ghost" onClick={pack} disabled={packing}>
+            {packing ? "Armando paquete…" : "Armar paquete y huella"}
+          </button>
         </div>
         {cause.notas ? <p className="meta">{cause.notas}</p> : null}
+        {packageHash ? (
+          <div className="meta">
+            <div>Huella SHA-256 del paquete evidencia.zip</div>
+            <div className="hash">{packageHash}</div>
+            <div>
+              <a href={`/api/cases/${id}/package/zip`}>Descargar zip</a>
+              {" · "}
+              <a href={`/api/cases/${id}/package/informe`}>Descargar informe</a>
+            </div>
+          </div>
+        ) : null}
         {evidence.length === 0 ? (
           <p className="meta">Cuando el teléfono envíe archivos, van a aparecer acá con su huella SHA-256.</p>
         ) : (
@@ -127,6 +159,7 @@ export function CasePage() {
                     <div>{item.filename}</div>
                     <div className="meta">
                       {formatBytes(item.size)} · {new Date(item.receivedAt).toLocaleString()}
+                      {item.source === "pantalla" ? " · pantalla por USB" : ""}
                     </div>
                     {item.note ? <div className="meta">{item.note}</div> : null}
                   </td>
@@ -134,7 +167,11 @@ export function CasePage() {
                   <td>
                     <div className="hash">{item.sha256}</div>
                     <div className={item.sha256Verified ? "ok" : "warn"}>
-                      {item.sha256Verified ? "Coincide con el teléfono" : "No coincide con la huella del teléfono"}
+                      {item.source === "pantalla"
+                        ? "Huella calculada en esta estación"
+                        : item.sha256Verified
+                          ? "Coincide con el teléfono"
+                          : "No coincide con la huella del teléfono"}
                     </div>
                   </td>
                   <td>
