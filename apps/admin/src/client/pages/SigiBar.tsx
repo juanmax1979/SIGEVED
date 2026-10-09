@@ -34,6 +34,7 @@ export function SigiBar({ onChange }: { onChange: (session: SigiSession) => void
   }, []);
 
   async function choose(id: string) {
+    if (!id) return;
     setError("");
     try {
       await api("/api/sigi/oficina", { method: "POST", body: JSON.stringify({ id }) });
@@ -69,7 +70,6 @@ export function SigiBar({ onChange }: { onChange: (session: SigiSession) => void
         <label>
           Dependencia donde se carga la evidencia
           <select value={session.oficinaId} onChange={(event) => void choose(event.target.value)}>
-            <option value="">Elegí una dependencia</option>
             {session.dependencias.map((item) => (
               <option key={item.id} value={item.id}>
                 {[item.nombre, item.rol, item.circunscripcion].filter(Boolean).join(" · ")}

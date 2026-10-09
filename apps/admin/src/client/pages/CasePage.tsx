@@ -21,6 +21,8 @@ export function CasePage() {
   const [error, setError] = useState("");
   const [packageHash, setPackageHash] = useState("");
   const [packing, setPacking] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function reload() {
     api<{ cause: CaseRecord; evidence: EvidenceRecord[]; sessions: PairingSession[] }>(`/api/cases/${id}`)
@@ -68,6 +70,18 @@ export function CasePage() {
     }
   }
 
+  async function remove() {
+    setDeleting(true);
+    setError("");
+    try {
+      await api(`/api/cases/${id}`, { method: "DELETE" });
+      navigate("/");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo eliminar la causa.");
+      setDeleting(false);
+    }
+  }
+
   if (!cause && !error) return <p className="meta">Cargando causa…</p>;
   if (!cause) return <p className="error">{error}</p>;
 
@@ -84,10 +98,29 @@ export function CasePage() {
             {cause.responsable ? ` · Recepción: ${cause.responsable}` : ""}
           </p>
         </div>
-        <Link to="/" className="btn-ghost">
-          Volver
-        </Link>
+        <div className="row">
+          <button className="btn-danger" type="button" onClick={() => setConfirming(true)}>
+            Eliminar causa
+          </button>
+          <Link to="/" className="btn-ghost">
+            Volver
+          </Link>
+        </div>
       </div>
+      {confirming ? (
+        <section className="panel" style={{ marginBottom: 18 }}>
+          <h2>Eliminar causa</h2>
+          <p className="error">Se eliminarán todos los registros de la causa y la causa.</p>
+          <div className="row">
+            <button className="btn-ghost" type="button" onClick={() => setConfirming(false)} disabled={deleting}>
+              Cancelar
+            </button>
+            <button className="btn-danger" type="button" onClick={() => void remove()} disabled={deleting}>
+              {deleting ? "Eliminando…" : "Eliminar causa"}
+            </button>
+          </div>
+        </section>
+      ) : null}
       {error ? <p className="error">{error}</p> : null}
       <section className="panel" style={{ marginBottom: 18 }}>
         <h2>Conectar un teléfono</h2>
@@ -133,7 +166,7 @@ export function CasePage() {
             <div>
               <a href={`/api/cases/${id}/package/zip`}>Descargar zip</a>
               {" · "}
-              <a href={`/api/cases/${id}/package/informe`}>Descargar informe</a>
+              <a href={`/api/cases/${id}/package/informe`}>Descargar informe PDF</a>
             </div>
           </div>
         ) : null}

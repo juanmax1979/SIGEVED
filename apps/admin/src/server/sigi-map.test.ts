@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mapExpediente, mapUsuario, etiquetaDependencia } from "./sigi-map.js";
-import { mismaDependencia } from "@espejo/shared";
+import { causaDeOficina, mismaDependencia } from "@espejo/shared";
 import { dniDelUsuario } from "./store.js";
 
 test("arma el usuario y sus dependencias de SIGI", () => {
@@ -29,6 +29,17 @@ test("arma el usuario y sus dependencias de SIGI", () => {
   assert.equal(mapped.dependencias[0]?.rol, "TITULAR");
   assert.equal(mapped.dependencias[1]?.nombre, "EQUIPO FISCAL Nº 15");
   assert.equal(etiquetaDependencia(mapped.dependencias[1]!), "EQUIPO FISCAL Nº 15 · SUBROGA · PRIMERA CIRCUNSCRIPCION JUDICIAL");
+});
+
+test("la lista de causas queda en la dependencia elegida", () => {
+  const fiscal14 = "EQUIPO FISCAL Nº 14 · TITULAR · PRIMERA CIRCUNSCRIPCION JUDICIAL";
+  const fiscal15 = "EQUIPO FISCAL Nº 15 · SUBROGA · PRIMERA CIRCUNSCRIPCION JUDICIAL";
+  const causa14 = { dependencia: "EQUIPO FISCAL Nº 14", oficina: fiscal14 };
+  const causa15 = { dependencia: "EQUIPO FISCAL N° 15", oficina: fiscal15 };
+  assert.equal(causaDeOficina(causa14, fiscal14), true);
+  assert.equal(causaDeOficina(causa15, fiscal14), false);
+  assert.equal(causaDeOficina(causa15, fiscal15), true);
+  assert.equal(causaDeOficina(causa14, ""), false);
 });
 
 test("completa la causa con el expediente de SIGI", () => {

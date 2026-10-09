@@ -92,7 +92,7 @@ export function SessionPage() {
           <h1>{view.cause.caratula}</h1>
           <p className="lede">
             {connected
-              ? `Teléfono conectado: ${view.session.deviceName}${view.session.contributorName ? ` · ${view.session.contributorName}` : ""}`
+              ? `Teléfono conectado: ${view.session.deviceName}${view.session.contributorName ? ` · ${view.session.contributorName}` : ""}${view.session.imei ? ` · IMEI ${view.session.imei}` : ""}`
               : "Esperando que la persona aportante escanee el código desde EVIDIA."}
           </p>
         </div>

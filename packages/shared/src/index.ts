@@ -47,6 +47,7 @@ export type PairingSession = {
   deviceId?: string;
   deviceName?: string;
   contributorName?: string;
+  imei?: string;
   connectedAt?: string;
 };
 
@@ -123,17 +124,26 @@ export const FINGERPRINT_PATHS = [
   "M24 24c2-6 8-8 12-4",
 ] as const;
 
+export function claveDependencia(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[º°]/g, "")
+    .replace(/[^A-Z0-9]/g, "");
+}
+
 export function mismaDependencia(a: string, b: string): boolean {
-  const clave = (value: string) =>
-    value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toUpperCase()
-      .replace(/[º°]/g, "")
-      .replace(/[^A-Z0-9]/g, "");
-  const left = clave(a);
-  const right = clave(b);
+  const left = claveDependencia(a);
+  const right = claveDependencia(b);
   return left.length > 0 && left === right;
+}
+
+export function causaDeOficina(cause: { dependencia: string; oficina: string }, oficinaNombre: string): boolean {
+  const nombre = oficinaNombre.split("·")[0]?.trim() ?? "";
+  if (!nombre) return false;
+  const cargadaEn = cause.oficina.split("·")[0]?.trim() ?? "";
+  return mismaDependencia(cause.dependencia, nombre) || mismaDependencia(cargadaEn, nombre);
 }
 
 export function formatBytes(size: number): string {

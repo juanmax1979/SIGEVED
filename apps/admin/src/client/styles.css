@@ -83,6 +83,23 @@ h2 { font-size: 22px; }
 }
 .card { padding: 22px; text-decoration: none; display: block; }
 .card:hover { border-color: #b9cce0; }
+.case-card { position: relative; padding: 0; }
+.case-card .card-link { display: block; padding: 22px 56px 22px 22px; text-decoration: none; color: inherit; }
+.card-trash {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+.card-trash:hover { background: #fdeceb; color: var(--danger); }
 .panel { padding: 22px; }
 .kicker {
   display: inline-block;
@@ -109,7 +126,7 @@ h2 { font-size: 22px; }
 .btn:hover { background: var(--blue-2); }
 .btn-ghost { background: white; border-color: #c5d4e4; color: var(--blue); }
 .btn-danger { background: white; color: var(--danger); border-color: #e7c8c4; }
-.btn:disabled, .btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn:disabled, .btn-ghost:disabled, .btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }
 
 label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
 input, select, textarea {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { mismaDependencia, type CaseRecord } from "@espejo/shared";
+import { causaDeOficina, mismaDependencia, type CaseRecord } from "@espejo/shared";
 import { api } from "../api";
 import { SigiBar, type SigiSession } from "./SigiBar";
 
@@ -11,15 +11,42 @@ export function CasesPage() {
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const [sigi, setSigi] = useState<SigiSession | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ListedCase | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     const data = await api<{ cases: ListedCase[] }>("/api/cases");
     setCases(data.cases);
   }
 
+  async function remove() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await api(`/api/cases/${pendingDelete.id}`, { method: "DELETE" });
+      setPendingDelete(null);
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo eliminar la causa.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const oficinaNombre = sigi?.oficinaNombre ?? "";
+  const visibles = useMemo(
+    () => (oficinaNombre ? cases.filter((cause) => causaDeOficina(cause, oficinaNombre)) : []),
+    [cases, oficinaNombre],
+  );
+
   useEffect(() => {
+    if (!oficinaNombre) {
+      setCases([]);
+      return;
+    }
     load().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudieron leer las causas."));
-  }, []);
+  }, [oficinaNombre]);
 
   return (
     <>
@@ -46,25 +73,61 @@ export function CasesPage() {
           }}
         />
       ) : null}
-      {cases.length === 0 ? (
+      {pendingDelete ? (
+        <section className="panel" style={{ marginBottom: 18 }}>
+          <h2>Eliminar causa</h2>
+          <p className="error">Se eliminarán todos los registros de la causa y la causa.</p>
+          <p className="meta">{pendingDelete.caratula}</p>
+          <div className="row">
+            <button className="btn-ghost" type="button" onClick={() => setPendingDelete(null)} disabled={deleting}>
+              Cancelar
+            </button>
+            <button className="btn-danger" type="button" onClick={() => void remove()} disabled={deleting}>
+              {deleting ? "Eliminando…" : "Eliminar causa"}
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {!oficinaNombre ? (
         <section className="panel">
-          <h2>Todavía no hay causas</h2>
-          <p className="meta">Creá la causa antes de pedirle a la persona aportante que abra EVIDIA en su teléfono.</p>
+          <h2>Elegí una dependencia</h2>
+          <p className="meta">Las causas se muestran según la dependencia seleccionada.</p>
+        </section>
+      ) : visibles.length === 0 ? (
+        <section className="panel">
+          <h2>No hay causas en esta dependencia</h2>
+          <p className="meta">En {oficinaNombre.split("·")[0]?.trim()} todavía no hay causas cargadas.</p>
         </section>
       ) : (
         <div className="grid cards">
-          {cases.map((cause) => (
-            <Link key={cause.id} to={`/causas/${cause.id}`} className="card">
-              {cause.proceso ? <div className="kicker">{cause.proceso}</div> : null}
-              <h2>{cause.caratula}</h2>
-              <p className="meta">
-                {cause.expediente || "Sin expediente"} · {cause.evidenceCount === 1 ? "1 archivo" : `${cause.evidenceCount} archivos`}
-              </p>
-            </Link>
+          {visibles.map((cause) => (
+            <article key={cause.id} className="card case-card">
+              <button className="card-trash" type="button" aria-label={`Eliminar ${cause.caratula}`} onClick={() => setPendingDelete(cause)}>
+                <TrashIcon />
+              </button>
+              <Link to={`/causas/${cause.id}`} className="card-link">
+                {cause.proceso ? <div className="kicker">{cause.proceso}</div> : null}
+                <h2>{cause.caratula}</h2>
+                <p className="meta">
+                  {cause.expediente || "Sin expediente"} · {cause.evidenceCount === 1 ? "1 archivo" : `${cause.evidenceCount} archivos`}
+                </p>
+              </Link>
+            </article>
           ))}
         </div>
       )}
     </>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 7h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M6.5 7l.8 12.2A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.3L17.5 7" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 

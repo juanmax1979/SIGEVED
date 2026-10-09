@@ -78,11 +78,42 @@ async function adb(args: string[], timeoutMs = 20000): Promise<{ code: number; s
   }
 }
 
+export function imeiEnTexto(text: string): string {
+  const clean = text.replace(/\u0000/g, "");
+  const labeled = clean.match(/IMEI[^0-9]{0,12}(\d{14,16})/i);
+  if (labeled?.[1]) return labeled[1];
+  const quoted = [...clean.matchAll(/'([^']*)'/g)].map((item) => item[1]).join("");
+  const fromParcel = quoted.replace(/[.\s]/g, "").match(/\d{14,16}/)?.[0];
+  if (fromParcel) return fromParcel;
+  return clean.match(/(?:^|[\s:=])(\d{15})(?:\s|$)/)?.[1] ?? "";
+}
+
 async function readImei(serial: string): Promise<string> {
+  const attempts = [
+    ["-s", serial, "shell", "cmd", "phone", "get-imei", "0"],
+    ["-s", serial, "shell", "service", "call", "iphonesubinfo", "1", "s16", "com.android.shell"],
+    ["-s", serial, "shell", "service", "call", "iphonesubinfo", "1"],
+    ["-s", serial, "shell", "dumpsys", "iphonesubinfo"],
+  ];
+  for (const args of attempts) {
+    try {
+      const result = await adb(args, 8000);
+      const imei = imeiEnTexto(result.stdout.toString("utf8"));
+      if (imei) return imei;
+    } catch {
+      // El siguiente método cubre otra versión de Android.
+    }
+  }
+  return "";
+}
+
+export async function imeiDelDispositivoConectado(): Promise<string> {
   try {
-    const result = await adb(["-s", serial, "shell", "service", "call", "iphonesubinfo", "1"], 8000);
-    const quoted = [...result.stdout.toString("utf8").matchAll(/'([^']*)'/g)].map((item) => item[1]).join("");
-    return quoted.replace(/[.\s]/g, "").match(/\d{14,16}/)?.[0] ?? "";
+    if (!(await installed("adb"))) return "";
+    const listed = await adb(["devices", "-l"], 8000);
+    const ready = parseDevices(listed.stdout.toString("utf8")).filter((device) => device.state === "device");
+    if (ready.length !== 1) return "";
+    return readImei(ready[0].serial);
   } catch {
     return "";
   }
@@ -159,14 +190,39 @@ export async function captureScreen(serial: string): Promise<Buffer> {
   return result.stdout.subarray(start);
 }
 
+export function tamanoGrabacion(width: number, height: number): string {
+  const maxLong = 1600;
+  const long = Math.max(width, height);
+  const scale = long > maxLong ? maxLong / long : 1;
+  const even = (value: number) => Math.max(16, Math.round((value * scale) / 16) * 16);
+  return `${even(width)}x${even(height)}`;
+}
+
+function parseDisplaySize(text: string): { width: number; height: number } | undefined {
+  const override = text.match(/Override size:\s*(\d+)x(\d+)/);
+  const physical = text.match(/Physical size:\s*(\d+)x(\d+)/);
+  const match = override ?? physical;
+  if (!match) return undefined;
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
 export async function recordScreen(serial: string, seconds: number, destination: string): Promise<void> {
   if (!validSerial(serial)) throw new Error("El identificador del teléfono no es válido.");
+  const measured = await adb(["-s", serial, "shell", "wm", "size"], 8000);
+  const display = parseDisplaySize(measured.stdout.toString("utf8"));
+  const size = display ? tamanoGrabacion(display.width, display.height) : "720x1280";
   const remote = "/sdcard/Download/evidia-pantalla.mp4";
   const recorded = await adb(
-    ["-s", serial, "shell", "screenrecord", "--time-limit", String(seconds), remote],
+    ["-s", serial, "shell", "screenrecord", "--size", size, "--bit-rate", "8000000", "--time-limit", String(seconds), remote],
     seconds * 1000 + 20000,
   );
-  if (recorded.code !== 0) throw new Error(recorded.stderr.trim() || "No se pudo grabar la pantalla.");
+  if (recorded.code !== 0) {
+    const detail = recorded.stderr.trim();
+    if (detail.includes("Encoder failed")) {
+      throw new Error("El teléfono no pudo iniciar el grabador de video. Cerrá el espejo de pantalla e intentá de nuevo.");
+    }
+    throw new Error(detail || "No se pudo grabar la pantalla.");
+  }
   const pulled = await adb(["-s", serial, "pull", remote, destination], 60000);
   await adb(["-s", serial, "shell", "rm", "-f", remote], 8000).catch(() => undefined);
   if (pulled.code !== 0) throw new Error(pulled.stderr.trim() || "No se pudo copiar el video a esta PC.");

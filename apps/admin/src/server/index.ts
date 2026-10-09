@@ -10,19 +10,22 @@ import {
   CASE_TYPES,
   EVIDENCE_CATEGORIES,
   PROTOCOL_VERSION,
+  causaDeOficina,
   labelCaseType,
   labelCategory,
+  mismaDependencia,
   type CaseType,
   type EvidenceCategory,
   type PairPayload,
+  type PairingSession,
 } from "@espejo/shared";
 import { z } from "zod";
 import { sha256File } from "./hash.js";
+import { escribirInformePdf } from "./informe.js";
 import { isLoopback, listLanHosts } from "./network.js";
-import { captureScreen, mirrorScreen, recordScreen, usbStatus } from "./adb.js";
+import { captureScreen, imeiDelDispositivoConectado, mirrorScreen, recordScreen, usbStatus } from "./adb.js";
 import { dniDesdeDirectorio } from "./directorio.js";
 import { datosExpediente, datosUsuario, dniConfigurado, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
-import { mismaDependencia } from "@espejo/shared";
 import { etiquetaDependencia } from "./sigi-map.js";
 import { clientDist, dataDir, ensureDataDirs } from "./paths.js";
 import {
@@ -31,6 +34,7 @@ import {
   connectDevice,
   createCase,
   createSession,
+  deleteCase,
   disconnectDevice,
   dniDelUsuario,
   evidenceFilePath,
@@ -47,6 +51,7 @@ import {
   setOperator,
   sessionByToken,
   sessionView,
+  setSessionImei,
   syncCatalog,
   updateCase,
 } from "./store.js";
@@ -171,7 +176,7 @@ app.get("/api/sigi/me", async (req, res) => {
     const sameUser = current?.username.toLowerCase() === username.toLowerCase();
     const selected = sameUser ? user.dependencias.find((item) => item.id === current?.oficinaId) : undefined;
     const only = user.dependencias.length === 1 ? user.dependencias[0] : undefined;
-    const office = selected ?? only;
+    const office = selected ?? only ?? user.dependencias[0];
     if (office && (!sameUser || current?.oficinaId !== office.id || current.dni !== dni)) {
       await setOperator({
         username,
@@ -253,10 +258,13 @@ app.get("/api/sigi/expediente", async (req, res) => {
 
 app.get("/api/cases", (_req, res) => {
   const db = readSnapshot();
-  const cases = db.cases.map((cause) => ({
-    ...cause,
-    evidenceCount: db.evidence.filter((item) => item.caseId === cause.id).length,
-  }));
+  const oficina = getOperator()?.oficinaNombre ?? "";
+  const cases = db.cases
+    .filter((cause) => causaDeOficina(cause, oficina))
+    .map((cause) => ({
+      ...cause,
+      evidenceCount: db.evidence.filter((item) => item.caseId === cause.id).length,
+    }));
   res.json({ cases });
 });
 
@@ -296,6 +304,18 @@ app.post("/api/cases", async (req, res) => {
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "No se pudo verificar la dependencia en SIGI." });
   }
+});
+
+app.delete("/api/cases/:id", (req, res) => {
+  deleteCase(req.params.id)
+    .then((removed) => {
+      if (!removed) {
+        res.status(404).json({ error: "No encontramos esa causa." });
+        return;
+      }
+      res.json({ ok: true });
+    })
+    .catch(nextError(res));
 });
 
 app.get("/api/cases/:id", (req, res) => {
@@ -364,11 +384,18 @@ app.post("/api/cases/:id/sessions", (req, res) => {
     .catch(nextError(res));
 });
 
-app.get("/api/sessions/:id", (req, res) => {
+app.get("/api/sessions/:id", async (req, res) => {
   const view = sessionView(req.params.id);
   if (!view.session) {
     res.status(404).json({ error: "No encontramos esa sesión." });
     return;
+  }
+  if (view.session.status === "connected" && !view.session.imei) {
+    const imei = await imeiDelDispositivoConectado();
+    if (imei) {
+      await setSessionImei(view.session.id, imei);
+      view.session.imei = imei;
+    }
   }
   res.json({ ...view, hosts: listLanHosts() });
 });
@@ -522,6 +549,11 @@ app.get("/api/cases/:id/package/zip", (req, res) => {
 });
 
 app.get("/api/cases/:id/package/informe", (req, res) => {
+  const pdfPath = packagePath(req.params.id, "informe.pdf");
+  if (existsSync(pdfPath)) {
+    res.download(pdfPath, "informe.pdf");
+    return;
+  }
   const informePath = packagePath(req.params.id, "informe.txt");
   if (!existsSync(informePath)) {
     res.status(404).json({ error: "Todavía no hay un informe de esta causa." });
@@ -537,6 +569,7 @@ app.get("/api/cases/:id/export", async (req, res, next) => {
       res.status(404).json({ error: "No encontramos esa causa." });
       return;
     }
+    bundle.sessions = await sesionesConImei(bundle.sessions);
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="evidia-${stamp}.zip"`);
@@ -562,7 +595,7 @@ const catalogItem = z.object({
   source: z.enum(["camera", "gallery", "document"]),
 });
 
-app.post("/api/pair/connect", (req, res) => {
+app.post("/api/pair/connect", async (req, res) => {
   const parsed = z
     .object({
       token: z.string().min(4),
@@ -575,25 +608,28 @@ app.post("/api/pair/connect", (req, res) => {
     res.status(400).json({ error: "No se pudo leer la conexión del teléfono." });
     return;
   }
-  connectDevice({
-    tokenOrCode: parsed.data.token,
-    deviceId: parsed.data.deviceId,
-    deviceName: parsed.data.deviceName,
-    contributorName: parsed.data.contributorName,
-  })
-    .then((result) => {
-      if (!result) {
-        res.status(404).json({ error: "El código no está vigente o ya lo usa otro teléfono." });
-        return;
-      }
-      res.json({
-        sessionId: result.session.id,
-        token: result.session.token,
-        caratula: result.caratula,
-        expiresAt: result.session.expiresAt,
-      });
-    })
-    .catch(nextError(res));
+  try {
+    const imei = await imeiDelDispositivoConectado();
+    const result = await connectDevice({
+      tokenOrCode: parsed.data.token,
+      deviceId: parsed.data.deviceId,
+      deviceName: parsed.data.deviceName,
+      contributorName: parsed.data.contributorName,
+      imei,
+    });
+    if (!result) {
+      res.status(404).json({ error: "El código no está vigente o ya lo usa otro teléfono." });
+      return;
+    }
+    res.json({
+      sessionId: result.session.id,
+      token: result.session.token,
+      caratula: result.caratula,
+      expiresAt: result.session.expiresAt,
+    });
+  } catch (error) {
+    nextError(res)(error);
+  }
 });
 
 app.post("/api/pair/catalog", (req, res) => {
@@ -714,6 +750,15 @@ function captureName(ext: string): string {
   return `pantalla-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.${ext}`;
 }
 
+async function sesionesConImei(sessions: PairingSession[]): Promise<PairingSession[]> {
+  if (sessions.every((item) => item.imei)) return sessions;
+  const imei = await imeiDelDispositivoConectado();
+  if (!imei) return sessions;
+  const pending = sessions.filter((item) => !item.imei && item.status === "connected");
+  await Promise.all(pending.map((item) => setSessionImei(item.id, imei)));
+  return sessions.map((item) => (item.imei || item.status !== "connected" ? item : { ...item, imei }));
+}
+
 function packagePath(caseId: string, name: string): string {
   return path.join(dataDir, "exports", caseId, name);
 }
@@ -734,6 +779,7 @@ function fillArchive(
       status: session.status,
       deviceName: session.deviceName,
       contributorName: session.contributorName,
+      imei: session.imei || "",
       connectedAt: session.connectedAt,
       createdAt: session.createdAt,
     })),
@@ -766,6 +812,7 @@ function fillArchive(
 async function writeCasePackage(caseId: string): Promise<{ sha256: string } | undefined> {
   const bundle = caseBundle(caseId);
   if (!bundle.cause) return undefined;
+  bundle.sessions = await sesionesConImei(bundle.sessions);
   const folder = path.join(dataDir, "exports", caseId);
   mkdirSync(folder, { recursive: true });
   const zipPath = path.join(folder, "evidencia.zip");
@@ -780,28 +827,13 @@ async function writeCasePackage(caseId: string): Promise<{ sha256: string } | un
     archive.finalize().catch(reject);
   });
   const sha256 = await sha256File(zipPath);
-  const informe = [
-    "EVIDIA — INFORME DE LA DILIGENCIA",
-    "Poder Judicial del Chaco",
-    "",
-    `Carátula: ${bundle.cause.caratula}`,
-    `Expediente: ${bundle.cause.expediente || "—"}`,
-    `Tipo: ${labelCaseType(bundle.cause.tipo)}`,
-    `Dependencia del expediente: ${bundle.cause.dependencia || "—"}`,
-    `Oficina de carga: ${bundle.cause.oficina || "—"}`,
-    `Responsable: ${bundle.cause.responsable || "—"}`,
-    `Generado: ${new Date().toISOString()}`,
-    `Archivos en el paquete: ${bundle.evidence.length}`,
-    "",
-    "Huella SHA-256 del archivo evidencia.zip:",
+  await escribirInformePdf(path.join(folder, "informe.pdf"), {
+    cause: bundle.cause,
+    evidence: bundle.evidence,
+    sessions: bundle.sessions,
     sha256,
-    "",
-    "Esta huella corresponde al paquete completo.",
-    "El informe queda fuera del zip para que la huella no cambie al leerla.",
-    "Dentro del zip, manifiesto.json y acta-recepcion.txt traen la huella SHA-256 de cada archivo.",
-    "",
-  ].join("\n");
-  writeFileSync(path.join(folder, "informe.txt"), informe, "utf8");
+    generadoEn: new Date().toISOString(),
+  });
   return { sha256 };
 }
 

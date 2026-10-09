@@ -160,6 +160,26 @@ export function updateCase(
   });
 }
 
+export function deleteCase(id: string): Promise<boolean> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return Promise.resolve(false);
+  return mutate((db) => {
+    const index = db.cases.findIndex((item) => item.id === id);
+    if (index < 0) return false;
+    const sessionIds = new Set(db.sessions.filter((item) => item.caseId === id).map((item) => item.id));
+    db.cases.splice(index, 1);
+    db.sessions = db.sessions.filter((item) => item.caseId !== id);
+    db.evidence = db.evidence.filter((item) => item.caseId !== id);
+    db.pulls = db.pulls.filter((item) => !sessionIds.has(item.sessionId));
+    for (const sessionId of sessionIds) delete db.catalogs[sessionId];
+    return true;
+  }).then((removed) => {
+    if (!removed) return false;
+    rmSync(path.join(filesDir, id), { recursive: true, force: true });
+    rmSync(path.join(dataDir, "exports", id), { recursive: true, force: true });
+    return true;
+  });
+}
+
 export function makePairingCode(): string {
   const bytes = randomBytes(8);
   let code = "";
@@ -218,6 +238,7 @@ export function connectDevice(input: {
   deviceId: string;
   deviceName: string;
   contributorName: string;
+  imei?: string;
 }): Promise<{ session: PairingSession; caratula: string } | undefined> {
   return mutate((db) => {
     const session = activeSession(db, input.tokenOrCode);
@@ -227,9 +248,17 @@ export function connectDevice(input: {
     session.deviceId = input.deviceId;
     session.deviceName = input.deviceName;
     session.contributorName = input.contributorName.trim();
+    if (input.imei) session.imei = input.imei;
     session.connectedAt = session.connectedAt ?? new Date().toISOString();
     const cause = db.cases.find((item) => item.id === session.caseId);
     return { session, caratula: cause?.caratula ?? "Causa" };
+  });
+}
+
+export function setSessionImei(sessionId: string, imei: string): Promise<void> {
+  return mutate((db) => {
+    const session = db.sessions.find((item) => item.id === sessionId);
+    if (session && imei) session.imei = imei;
   });
 }
 
