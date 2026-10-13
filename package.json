@@ -12,6 +12,7 @@
     "admin:start": "npm run start --workspace @espejo/admin",
     "mobile": "npm run start --workspace espejo-mobile",
     "build": "npm run build --workspace @espejo/admin",
+    "package:win": "node scripts/empaquetar.mjs",
     "typecheck": "npm run typecheck --workspace @espejo/admin --workspace espejo-mobile"
   }
 }

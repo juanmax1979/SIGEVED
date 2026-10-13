@@ -25,7 +25,7 @@ import { escribirInformePdf } from "./informe.js";
 import { isLoopback, listLanHosts } from "./network.js";
 import { captureScreen, imeiDelDispositivoConectado, mirrorScreen, recordScreen, usbStatus } from "./adb.js";
 import { dniDesdeDirectorio } from "./directorio.js";
-import { datosExpediente, datosUsuario, dniConfigurado, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
+import { datosExpediente, datosUsuario, dniConfigurado, mensajeSinSigi, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
 import { etiquetaDependencia } from "./sigi-map.js";
 import { clientDist, dataDir, ensureDataDirs } from "./paths.js";
 import {
@@ -148,7 +148,7 @@ app.get("/api/sigi/me", async (req, res) => {
     error: "",
   };
   if (!sigiConfig()) {
-    res.json({ ...empty, configured: false, needsDni: false, error: "Falta apps/admin/data/sigi.json con el servidor y la base de SIGI." });
+    res.json({ ...empty, configured: false, needsDni: false, error: mensajeSinSigi() });
     return;
   }
   try {

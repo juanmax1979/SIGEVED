@@ -29,6 +29,10 @@ export function windowsUser(): string {
   return process.env.USERNAME || "usuario";
 }
 
+export function mensajeSinSigi(): string {
+  return `Falta ${path.join(dataDir, "sigi.json")} con el servidor y la base de SIGI.`;
+}
+
 export function sigiConfig(): SigiConfig | undefined {
   const file = path.join(dataDir, "sigi.json");
   let fromFile: Partial<SigiConfig> = {};
@@ -127,7 +131,7 @@ function sqlValue(parameter: SigiParameter, value: string): string {
 
 async function execProc(procedure: string, value: string, hints: string[]): Promise<Record<string, unknown>[]> {
   const config = sigiConfig();
-  if (!config) throw new Error("Falta apps/admin/data/sigi.json con el servidor y la base de SIGI.");
+  if (!config) throw new Error(mensajeSinSigi());
   const info = await describe(config, procedure);
   const parameter = chooseParameter(info.parameters, hints);
   if (info.parameters.filter((item) => item.mode === "IN").length > 1 && !parameter) {
