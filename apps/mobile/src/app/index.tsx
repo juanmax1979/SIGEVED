@@ -93,9 +93,9 @@ export default function HomeScreen() {
     <View style={styles.screen}>
       <View style={styles.brandBlock}>
         <Logo size={64} />
-        <Text style={styles.brandName}>EVIDIA</Text>
+        <Text style={styles.brandName}>SIGVED</Text>
       </View>
-      <Text style={styles.system}>Sistema de Extracción y Verificación de Evidencia Digital</Text>
+      <Text style={styles.system}>Sistema Integrado de Gestión Voluntario de Evidencia Digital</Text>
       <Text style={styles.institution}>{institutionTitle}</Text>
       <Text style={styles.lead}>
         Las fotos, videos y documentos quedan en este teléfono hasta que los envíes a la estación. Nada se comparte solo. Si conectan el cable USB, la computadora mira la pantalla y guarda esas capturas.

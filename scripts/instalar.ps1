@@ -1,24 +1,24 @@
 $ErrorActionPreference = "Stop"
 
-$dest = Join-Path $env:LOCALAPPDATA "EVIDIA"
+$dest = Join-Path $env:LOCALAPPDATA "SIGVED"
 $here = $PSScriptRoot
 
-if (Test-Path (Join-Path $here "EVIDIA.exe")) {
+if (Test-Path (Join-Path $here "SIGVED.exe")) {
   $source = $here
 } else {
-  $zip = Join-Path $here "EVIDIA.zip"
+  $zip = Join-Path $here "SIGVED.zip"
   if (-not (Test-Path $zip)) {
-    throw "No encuentro EVIDIA.exe ni EVIDIA.zip junto a este instalador."
+    throw "No encuentro SIGVED.exe ni SIGVED.zip junto a este instalador."
   }
   $stage = Join-Path $env:TEMP "evidia-setup"
   if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
   New-Item -ItemType Directory -Path $stage | Out-Null
   tar -xf $zip -C $stage
-  $source = Join-Path $stage "EVIDIA"
+  $source = Join-Path $stage "SIGVED"
 }
 
-if (-not (Test-Path (Join-Path $source "EVIDIA.exe"))) {
-  throw "El paquete no trae EVIDIA.exe."
+if (-not (Test-Path (Join-Path $source "SIGVED.exe"))) {
+  throw "El paquete no trae SIGVED.exe."
 }
 
 $mismoLugar = [string]::Equals(
@@ -47,12 +47,12 @@ foreach ($carpeta in @(
   [Environment]::GetFolderPath("Desktop"),
   (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs")
 )) {
-  $acceso = $shell.CreateShortcut((Join-Path $carpeta "EVIDIA.lnk"))
-  $acceso.TargetPath = Join-Path $dest "EVIDIA.exe"
+  $acceso = $shell.CreateShortcut((Join-Path $carpeta "SIGVED.lnk"))
+  $acceso.TargetPath = Join-Path $dest "SIGVED.exe"
   $acceso.WorkingDirectory = $dest
-  $acceso.Description = "Estación EVIDIA"
-  $acceso.IconLocation = "$(Join-Path $dest 'EVIDIA.ico'),0"
+  $acceso.Description = "Estación SIGVED"
+  $acceso.IconLocation = "$(Join-Path $dest 'SIGVED.ico'),0"
   $acceso.Save()
 }
 
-Start-Process (Join-Path $dest "EVIDIA.exe")
+Start-Process (Join-Path $dest "SIGVED.exe")

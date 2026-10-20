@@ -9,7 +9,7 @@ function HeaderTitle() {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
       <Logo size={28} />
-      <Text style={{ color: theme.ink, fontWeight: "800", fontSize: 18, letterSpacing: 1.4 }}>EVIDIA</Text>
+      <Text style={{ color: theme.ink, fontWeight: "800", fontSize: 18, letterSpacing: 1.4 }}>SIGVED</Text>
     </View>
   );
 }

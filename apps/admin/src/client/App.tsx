@@ -19,7 +19,7 @@ export function App() {
   if (error) {
     return (
       <main className="main">
-        <h1>EVIDIA</h1>
+        <h1>SIGVED</h1>
         <p className="error">{error}</p>
       </main>
     );
@@ -39,8 +39,8 @@ export function App() {
         <Link to="/" className="brand">
           <Logo />
           <div>
-            <strong>EVIDIA</strong>
-            <span>Sistema de Extracción y Verificación de Evidencia Digital</span>
+            <strong>SIGVED</strong>
+            <span>Sistema Integrado de Gestión Voluntario de Evidencia Digital</span>
             <span>Poder Judicial del Chaco</span>
           </div>
         </Link>

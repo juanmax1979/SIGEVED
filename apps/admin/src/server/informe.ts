@@ -74,7 +74,7 @@ export function escribirInformePdf(filePath: string, data: InformePdf): Promise<
     bufferPages: true,
     compress: false,
     info: {
-      Title: "EVIDIA — Informe de la diligencia",
+      Title: "SIGVED — Informe de la diligencia",
       Author: "Poder Judicial del Chaco",
       Subject: data.cause.caratula,
     },
@@ -105,10 +105,10 @@ function encabezado(doc: Pdf, continua: boolean): number {
   doc.save();
   doc.rect(0, 0, doc.page.width, alto).fillColor(blue).fill();
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(continua ? 11 : 22);
-  doc.text("EVIDIA", left, continua ? 12 : 28, { characterSpacing: continua ? 1 : 2.4, lineBreak: false });
+  doc.text("SIGVED", left, continua ? 12 : 28, { characterSpacing: continua ? 1 : 2.4, lineBreak: false });
   if (!continua) {
     doc.font("Helvetica").fontSize(10);
-    doc.text("Sistema de Extracción y Verificación de Evidencia Digital", left, 58, { lineBreak: false });
+    doc.text("Sistema Integrado de Gestión Voluntario de Evidencia Digital", left, 58, { lineBreak: false });
     doc.fontSize(12).text("Poder Judicial del Chaco", left, 76, { lineBreak: false });
   }
   doc.restore();
@@ -249,7 +249,7 @@ function pie(doc: Pdf): void {
     doc.moveTo(left, y).lineTo(right, y).strokeColor(line).lineWidth(0.6).stroke();
     doc.restore();
     doc.fillColor(muted).font("Helvetica").fontSize(8).text(
-      `EVIDIA · Poder Judicial del Chaco · Página ${index + 1} de ${range.count}`,
+      `SIGVED · Poder Judicial del Chaco · Página ${index + 1} de ${range.count}`,
       left,
       y + 8,
       { width, align: "center", lineBreak: false },

@@ -58,7 +58,7 @@ export default function ItemScreen() {
       <Pressable
         style={styles.delete}
         onPress={() =>
-          Alert.alert("Quitar archivo", "Se borra de EVIDIA en este teléfono.", [
+          Alert.alert("Quitar archivo", "Se borra de SIGVED en este teléfono.", [
             { text: "Cancelar", style: "cancel" },
             {
               text: "Quitar",

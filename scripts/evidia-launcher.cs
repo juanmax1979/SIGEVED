@@ -32,7 +32,7 @@ namespace Evidia
             {
                 MessageBox.Show(
                     "La instalación está incompleta. Falta el runtime o el servidor.",
-                    "EVIDIA",
+                    "SIGVED",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
@@ -54,7 +54,7 @@ namespace Evidia
             {
                 MessageBox.Show(
                     "La estación no arrancó. El detalle quedó en datos\\estacion.log",
-                    "EVIDIA",
+                    "SIGVED",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 Detener();
@@ -66,8 +66,8 @@ namespace Evidia
                 if (propio)
                 {
                     MessageBox.Show(
-                        "La estación arrancó, pero no encuentra la interfaz. Reinstalá EVIDIA.",
-                        "EVIDIA",
+                        "La estación arrancó, pero no encuentra la interfaz. Reinstalá SIGVED.",
+                        "SIGVED",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
                     Detener();
@@ -75,8 +75,8 @@ namespace Evidia
                 else
                 {
                     MessageBox.Show(
-                        "El puerto 4780 ya lo está usando otro programa. Por eso el navegador abre el servidor y muestra \"Cannot GET /\". Cerrá el servidor de desarrollo y volvé a abrir EVIDIA.",
-                        "EVIDIA",
+                        "El puerto 4780 ya lo está usando otro programa. Por eso el navegador abre el servidor y muestra \"Cannot GET /\". Cerrá el servidor de desarrollo y volvé a abrir SIGVED.",
+                        "SIGVED",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                 }
@@ -144,7 +144,7 @@ namespace Evidia
                 HttpWebRequest pedido = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:4780/");
                 pedido.Method = "GET";
                 pedido.Timeout = 2000;
-                pedido.UserAgent = "EVIDIA";
+                pedido.UserAgent = "SIGVED";
                 using (HttpWebResponse respuesta = (HttpWebResponse)pedido.GetResponse())
                 using (StreamReader lector = new StreamReader(respuesta.GetResponseStream()))
                 {
@@ -185,7 +185,7 @@ namespace Evidia
     {
         public Ventana()
         {
-            Text = "EVIDIA";
+            Text = "SIGVED";
             Font = new Font("Segoe UI", 10f);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;

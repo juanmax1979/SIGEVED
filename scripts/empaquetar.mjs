@@ -6,7 +6,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const release = path.join(root, "release");
-const paquete = path.join(release, "EVIDIA");
+const paquete = path.join(release, "SIGVED");
 const appDir = path.join(paquete, "app");
 const csc = path.join(process.env.WINDIR ?? "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
 
@@ -104,14 +104,16 @@ if (existsSync(sigiLocal)) cpSync(sigiLocal, path.join(paquete, "datos", "sigi.j
 writeFileSync(
   path.join(paquete, "LEEME.txt"),
   [
-    "EVIDIA",
+    "SIGVED",
+    "Sistema Integrado de Gestión Voluntario de Evidencia Digital",
+    "Poder Judicial del Chaco",
     "",
     "Instalar en esta PC:",
-    "  Ejecutá Instalar-EVIDIA.exe, o, si descomprimiste la carpeta, Instalar.bat.",
-    "  Queda en %LOCALAPPDATA%\\EVIDIA y crea un acceso directo.",
+    "  Ejecutá Instalar-SIGVED.exe, o, si descomprimiste la carpeta, Instalar.bat.",
+    "  Queda en %LOCALAPPDATA%\\SIGVED y crea un acceso directo.",
     "",
     "Probar sin instalar:",
-    "  Ejecutá EVIDIA.exe dentro de esta carpeta.",
+    "  Ejecutá SIGVED.exe dentro de esta carpeta.",
     "",
     "SIGI y Active Directory:",
     "  Si el paquete trae datos\\sigi.json, la estación ya puede consultar SIGI.",
@@ -122,7 +124,7 @@ writeFileSync(
     "La primera vez Windows puede pedir permiso de firewall para node.exe.",
     "Aceptalo en redes privadas para que el teléfono pueda conectarse.",
     "",
-    "Cerrar la ventana de EVIDIA detiene la estación.",
+    "Cerrar la ventana de SIGVED detiene la estación.",
     "El registro queda en datos\\estacion.log.",
     "",
   ].join("\r\n"),
@@ -134,8 +136,8 @@ writeFileSync(
   "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0instalar.ps1\"\r\n",
 );
 
-if (!existsSync(csc)) throw new Error("No encuentro el compilador de .NET Framework para armar EVIDIA.exe.");
-const icono = path.join(paquete, "EVIDIA.ico");
+if (!existsSync(csc)) throw new Error("No encuentro el compilador de .NET Framework para armar SIGVED.exe.");
+const icono = path.join(paquete, "SIGVED.ico");
 console.log("Preparando el ícono...");
 run("powershell.exe", [
   "-NoProfile",
@@ -148,7 +150,7 @@ run("powershell.exe", [
   "-Destino",
   icono,
 ]);
-console.log("Compilando EVIDIA.exe...");
+console.log("Compilando SIGVED.exe...");
 run(csc, [
   "/nologo",
   "/target:winexe",
@@ -156,7 +158,7 @@ run(csc, [
   "/win32icon:" + icono,
   "/r:System.Windows.Forms.dll",
   "/r:System.Drawing.dll",
-  `/out:${path.join(paquete, "EVIDIA.exe")}`,
+  `/out:${path.join(paquete, "SIGVED.exe")}`,
   path.join(root, "scripts", "evidia-launcher.cs"),
 ]);
 
@@ -190,16 +192,16 @@ try {
   child.kill();
 }
 
-const zip = path.join(release, "EVIDIA.zip");
+const zip = path.join(release, "SIGVED.zip");
 if (existsSync(zip)) rmSync(zip);
 console.log("Comprimiendo...");
-run("tar", ["-a", "-c", "-f", zip, "-C", release, "EVIDIA"]);
+run("tar", ["-a", "-c", "-f", zip, "-C", release, "SIGVED"]);
 
-const instalador = path.join(release, "Instalar-EVIDIA.exe");
+const instalador = path.join(release, "Instalar-SIGVED.exe");
 const payload = path.join(release, "payload-instalador");
 rmSync(payload, { recursive: true, force: true });
 mkdirSync(payload, { recursive: true });
-cpSync(zip, path.join(payload, "EVIDIA.zip"));
+cpSync(zip, path.join(payload, "SIGVED.zip"));
 cpSync(path.join(root, "scripts", "instalar.ps1"), path.join(payload, "instalar.ps1"));
 writeFileSync(
   path.join(payload, "instalar.cmd"),
@@ -242,14 +244,14 @@ writeFileSync(
     "[Strings]",
     "InstallPrompt=",
     "DisplayLicense=",
-    "FinishMessage=EVIDIA quedó instalado. Se abrió la estación.",
+    "FinishMessage=SIGVED quedó instalado. Se abrió la estación.",
     `TargetName=${q(instalador)}`,
-    "FriendlyName=EVIDIA",
+    "FriendlyName=SIGVED",
     "AppLaunched=instalar.cmd",
     "PostInstallCmd=<None>",
     "AdminQuietInstCmd=",
     "UserQuietInstCmd=",
-    'FILE0="EVIDIA.zip"',
+    'FILE0="SIGVED.zip"',
     'FILE1="instalar.ps1"',
     'FILE2="instalar.cmd"',
     "",

@@ -93,7 +93,7 @@ export function SessionPage() {
           <p className="lede">
             {connected
               ? `Teléfono conectado: ${view.session.deviceName}${view.session.contributorName ? ` · ${view.session.contributorName}` : ""}${view.session.imei ? ` · IMEI ${view.session.imei}` : ""}`
-              : "Esperando que la persona aportante escanee el código desde EVIDIA."}
+              : "Esperando que la persona aportante escanee el código desde SIGVED."}
           </p>
         </div>
         <div className="row">
@@ -128,7 +128,7 @@ export function SessionPage() {
           </div>
           {!connected ? <p className="banner">Cuando el teléfono se conecte, vas a ver acá los archivos que la persona tiene listos.</p> : null}
           {connected && view.catalog.length === 0 ? (
-            <p className="meta">El teléfono está conectado y todavía no tiene archivos en EVIDIA.</p>
+            <p className="meta">El teléfono está conectado y todavía no tiene archivos en SIGVED.</p>
           ) : null}
           {view.catalog.length > 0 ? (
             <table>

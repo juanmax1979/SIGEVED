@@ -437,7 +437,7 @@ export async function mirrorScreen(serial: string): Promise<void> {
   if (!(await installed("scrcpy"))) {
     throw new Error("Para espejar la pantalla hace falta scrcpy en esta computadora.");
   }
-  const child = spawn(findTool("scrcpy"), ["--serial", serial, "--window-title", "EVIDIA — pantalla del teléfono"], {
+  const child = spawn(findTool("scrcpy"), ["--serial", serial, "--window-title", "SIGVED — pantalla del teléfono"], {
     detached: true,
     stdio: "ignore",
     windowsHide: false,
