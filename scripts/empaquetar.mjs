@@ -61,12 +61,13 @@ await esbuild.build({
   format: "esm",
   target: "node22",
   outfile: path.join(appDir, "server.mjs"),
-  external: ["archiver", "cors", "express", "multer", "pdfkit", "zod"],
+  external: ["archiver", "cors", "docx", "express", "multer", "pdfkit", "tesseract.js", "zod"],
   logLevel: "info",
 });
 
 cpSync(path.join(root, "apps", "admin", "src", "server", "sigi.ps1"), path.join(appDir, "sigi.ps1"));
 cpSync(path.join(root, "apps", "admin", "dist"), path.join(appDir, "dist"), { recursive: true });
+cpSync(path.join(root, "apps", "admin", "tessdata"), path.join(appDir, "tessdata"), { recursive: true });
 const tools = path.join(root, "apps", "admin", "tools");
 if (existsSync(tools)) cpSync(tools, path.join(appDir, "tools"), { recursive: true });
 
@@ -79,7 +80,9 @@ const serverPackage = {
     cors: "^2.8.5",
     express: "^5.1.0",
     multer: "^2.0.2",
+    docx: "^9.13.0",
     pdfkit: "^0.20.2",
+    "tesseract.js": "^7.0.0",
     zod: "^4.1.5",
   },
 };

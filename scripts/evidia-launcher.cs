@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Windows.Forms;
@@ -12,6 +13,7 @@ namespace Evidia
     {
         static Process proceso;
         static StreamWriter bitacora;
+        static bool propio;
         static readonly object candado = new object();
 
         [STAThread]
@@ -36,7 +38,11 @@ namespace Evidia
                 return;
             }
 
-            if (!PuertoAbierto()) Iniciar(node, servidor, datos);
+            if (!PuertoAbierto())
+            {
+                Iniciar(node, servidor, datos);
+                propio = true;
+            }
 
             for (int i = 0; i < 50 && !PuertoAbierto(); i++)
             {
@@ -52,6 +58,28 @@ namespace Evidia
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 Detener();
+                return;
+            }
+
+            if (!InterfazLista())
+            {
+                if (propio)
+                {
+                    MessageBox.Show(
+                        "La estación arrancó, pero no encuentra la interfaz. Reinstalá EVIDIA.",
+                        "EVIDIA",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    Detener();
+                }
+                else
+                {
+                    MessageBox.Show(
+                        "El puerto 4780 ya lo está usando otro programa. Por eso el navegador abre el servidor y muestra \"Cannot GET /\". Cerrá el servidor de desarrollo y volvé a abrir EVIDIA.",
+                        "EVIDIA",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
                 return;
             }
 
@@ -107,6 +135,30 @@ namespace Evidia
                 if (bitacora != null) bitacora.Dispose();
             }
             catch (Exception) { }
+        }
+
+        static bool InterfazLista()
+        {
+            try
+            {
+                HttpWebRequest pedido = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:4780/");
+                pedido.Method = "GET";
+                pedido.Timeout = 2000;
+                pedido.UserAgent = "EVIDIA";
+                using (HttpWebResponse respuesta = (HttpWebResponse)pedido.GetResponse())
+                using (StreamReader lector = new StreamReader(respuesta.GetResponseStream()))
+                {
+                    string tipo = respuesta.ContentType ?? "";
+                    string cuerpo = lector.ReadToEnd();
+                    return (int)respuesta.StatusCode == 200
+                        && tipo.IndexOf("text/html", StringComparison.OrdinalIgnoreCase) >= 0
+                        && cuerpo.IndexOf("<html", StringComparison.OrdinalIgnoreCase) >= 0;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         static bool PuertoAbierto()

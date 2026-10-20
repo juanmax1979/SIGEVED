@@ -228,6 +228,210 @@ export async function recordScreen(serial: string, seconds: number, destination:
   if (pulled.code !== 0) throw new Error(pulled.stderr.trim() || "No se pudo copiar el video a esta PC.");
 }
 
+const IMAGENES = new Set([".jpg", ".jpeg", ".png", ".webp", ".heic", ".gif"]);
+const VIDEOS = new Set([".mp4", ".mov", ".mkv", ".3gp", ".webm", ".m4v"]);
+
+export type MedioTelefono = {
+  id: string;
+  name: string;
+  path: string;
+  size: number;
+  date: number;
+};
+
+function extensiones(tipo: "imagen" | "video"): Set<string> {
+  return tipo === "imagen" ? IMAGENES : VIDEOS;
+}
+
+export function rutaDeMedioPermitida(ruta: string, tipo: "imagen" | "video"): boolean {
+  const normal = ruta.replace(/\\/g, "/").trim();
+  if (!normal || normal.includes("..") || normal.includes("\0")) return false;
+  const permitida = /^\/(sdcard|mnt\/sdcard|storage\/emulated\/0)\//.test(normal);
+  return permitida && extensiones(tipo).has(path.posix.extname(normal).toLowerCase());
+}
+
+export function parseContentQuery(text: string, tipo: "imagen" | "video"): MedioTelefono[] {
+  const files: MedioTelefono[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/_display_name=(.*?),\s_data=(.*?),\s_size=(.*?),\sdate_added=(.*)$/);
+    if (!match) continue;
+    const filePath = match[2].trim();
+    if (!rutaDeMedioPermitida(filePath, tipo)) continue;
+    files.push({
+      id: line.match(/_id=(\d+)/)?.[1] ?? "",
+      name: match[1].trim() || path.posix.basename(filePath),
+      path: filePath,
+      size: Number(match[3]) || 0,
+      date: Number(match[4]) || 0,
+    });
+  }
+  return files;
+}
+
+export function parseFindMedia(text: string, tipo: "imagen" | "video"): MedioTelefono[] {
+  const files: MedioTelefono[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const filePath = line.trim();
+    if (!rutaDeMedioPermitida(filePath, tipo)) continue;
+    files.push({ id: "", name: path.posix.basename(filePath), path: filePath, size: 0, date: 0 });
+  }
+  return files;
+}
+
+export function recortarMiniatura(buffer: Buffer): Buffer | undefined {
+  const jpeg = buffer.indexOf(Buffer.from([0xff, 0xd8, 0xff]));
+  const png = buffer.indexOf(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  const start = jpeg >= 0 && (png < 0 || jpeg <= png) ? jpeg : png;
+  if (start < 0 || buffer.length - start < 32) return undefined;
+  return buffer.subarray(start);
+}
+
+let miniaturasActivas = 0;
+const esperaMiniatura: Array<() => void> = [];
+
+function conCupo<T>(tarea: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const correr = () => {
+      miniaturasActivas += 1;
+      tarea().then(resolve, reject).finally(() => {
+        miniaturasActivas -= 1;
+        const siguiente = esperaMiniatura.shift();
+        if (siguiente) siguiente();
+      });
+    };
+    if (miniaturasActivas < 3) correr();
+    else esperaMiniatura.push(correr);
+  });
+}
+
+export async function leerMiniatura(serial: string, tipo: "imagen" | "video", id: string): Promise<Buffer> {
+  if (!validSerial(serial) || !/^\d{1,12}$/.test(id)) throw new Error("No se puede mostrar esa vista previa.");
+  return conCupo(async () => {
+    const coleccion = tipo === "imagen" ? "images" : "video";
+    const result = await adb(
+      ["-s", serial, "exec-out", "content", "read", "--uri", `content://media/external/${coleccion}/media/${id}/thumbnail`],
+      20000,
+    );
+    const imagen = recortarMiniatura(result.stdout);
+    if (!imagen) throw new Error("El teléfono no tiene una vista previa de ese archivo.");
+    return imagen;
+  });
+}
+
+export function elegirFotoNueva(
+  conocidas: string[],
+  actuales: MedioTelefono[],
+): { foto?: MedioTelefono; incompatible: boolean } {
+  const previas = new Set(conocidas);
+  const nuevas = actuales
+    .filter((item) => item.path && !previas.has(item.path))
+    .sort((a, b) => b.date - a.date || b.path.localeCompare(a.path));
+  const foto = nuevas.find((item) => [".jpg", ".jpeg", ".png"].includes(path.posix.extname(item.path).toLowerCase()));
+  return { foto, incompatible: !foto && nuevas.length > 0 };
+}
+
+export async function telefonoListo(serial = ""): Promise<string> {
+  const status = await usbStatus();
+  if (!status.adb) throw new Error("No está instalado adb en esta computadora.");
+  const pedido = serial.trim();
+  if (pedido) {
+    if (!validSerial(pedido)) throw new Error("El identificador del teléfono no es válido.");
+    const match = status.devices.find((item) => item.serial === pedido);
+    if (!match || match.state !== "device") throw new Error("Conectá el teléfono por USB y aceptá la depuración.");
+    return match.serial;
+  }
+  const listo = status.devices.find((item) => item.state === "device");
+  if (listo) return listo.serial;
+  if (status.devices.some((item) => item.state === "unauthorized")) {
+    throw new Error("Aceptá la depuración USB en el teléfono.");
+  }
+  throw new Error("Conectá el teléfono por USB para sacar la foto del DNI.");
+}
+
+export async function abrirCamaraTelefono(serial: string): Promise<string[]> {
+  if (!validSerial(serial)) throw new Error("El identificador del teléfono no es válido.");
+  const actuales = await listarMedios(serial, "imagen");
+  const intents = [
+    ["-s", serial, "shell", "am", "start", "-a", "android.media.action.STILL_IMAGE_CAMERA"],
+    ["-s", serial, "shell", "am", "start", "-a", "android.media.action.IMAGE_CAPTURE"],
+  ];
+  let detalle = "";
+  for (const args of intents) {
+    const result = await adb(args, 12000);
+    const text = `${result.stdout.toString("utf8")}\n${result.stderr}`;
+    if (result.code === 0 && !/Error:|unable to resolve/i.test(text)) {
+      return actuales.map((item) => item.path);
+    }
+    detalle = text.trim();
+  }
+  throw new Error(detalle || "No se pudo abrir la cámara del teléfono. Desbloquealo y aceptá la depuración USB.");
+}
+
+export async function traerFotoNueva(
+  serial: string,
+  conocidas: string[],
+  destination: string,
+): Promise<{ mime: string } | undefined> {
+  if (!validSerial(serial)) throw new Error("El identificador del teléfono no es válido.");
+  const actuales = await listarMedios(serial, "imagen");
+  const elegida = elegirFotoNueva(conocidas, actuales);
+  if (elegida.incompatible) {
+    throw new Error("La cámara guardó la foto en un formato que no se puede verificar. Configurala en JPG o usá Subir foto.");
+  }
+  if (!elegida.foto) return undefined;
+  await copiarMedio(serial, elegida.foto.path, destination, "imagen");
+  await adb(["-s", serial, "shell", "rm", "-f", elegida.foto.path], 8000).catch(() => undefined);
+  return { mime: mimeDeMedio(elegida.foto.path) };
+}
+
+export async function listarMedios(serial: string, tipo: "imagen" | "video"): Promise<MedioTelefono[]> {
+  if (!validSerial(serial)) throw new Error("El identificador del teléfono no es válido.");
+  const uri = tipo === "imagen" ? "content://media/external/images/media" : "content://media/external/video/media";
+  const query = await adb(
+    ["-s", serial, "shell", "content", "query", "--uri", uri, "--projection", "_id:_display_name:_data:_size:date_added"],
+    30000,
+  );
+  let files = parseContentQuery(query.stdout.toString("utf8"), tipo);
+  if (files.length === 0) {
+    const found = await adb(
+      ["-s", serial, "shell", "find /sdcard/DCIM /sdcard/Pictures /sdcard/Movies /sdcard/Download /sdcard/WhatsApp/Media -type f"],
+      40000,
+    );
+    files = parseFindMedia(found.stdout.toString("utf8"), tipo);
+  }
+  files.sort((a, b) => b.date - a.date || a.name.localeCompare(b.name, "es"));
+  return files.slice(0, 300);
+}
+
+export async function copiarMedio(serial: string, remote: string, destination: string, tipo: "imagen" | "video"): Promise<void> {
+  if (!validSerial(serial) || !rutaDeMedioPermitida(remote, tipo)) {
+    throw new Error("Ese archivo no se puede copiar desde el teléfono.");
+  }
+  const pulled = await adb(["-s", serial, "pull", remote, destination], 180000);
+  if (pulled.code !== 0 || !existsSync(destination)) {
+    throw new Error(pulled.stderr.trim() || "No se pudo copiar el archivo desde el teléfono.");
+  }
+}
+
+export function mimeDeMedio(ruta: string): string {
+  const ext = path.posix.extname(ruta).toLowerCase();
+  const tabla: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".heic": "image/heic",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".3gp": "video/3gpp",
+    ".webm": "video/webm",
+    ".m4v": "video/mp4",
+  };
+  return tabla[ext] ?? "application/octet-stream";
+}
+
 export async function mirrorScreen(serial: string): Promise<void> {
   if (!validSerial(serial)) throw new Error("El identificador del teléfono no es válido.");
   if (!(await installed("scrcpy"))) {

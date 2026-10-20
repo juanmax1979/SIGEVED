@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, createWriteStream, existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import archiver from "archiver";
@@ -11,19 +11,24 @@ import {
   EVIDENCE_CATEGORIES,
   PROTOCOL_VERSION,
   causaDeOficina,
-  labelCaseType,
+  errorAportante,
   labelCategory,
   mismaDependencia,
+  nombreCarpetaExpediente,
+  normalizarAportante,
   type CaseType,
   type EvidenceCategory,
   type PairPayload,
   type PairingSession,
 } from "@espejo/shared";
 import { z } from "zod";
+import { materialActa } from "./acta.js";
+import { materialConsentimiento } from "./consentimiento.js";
+import { guardarFotoDni, rutaFotoDni } from "./dni-foto.js";
 import { sha256File } from "./hash.js";
 import { escribirInformePdf } from "./informe.js";
 import { isLoopback, listLanHosts } from "./network.js";
-import { captureScreen, imeiDelDispositivoConectado, mirrorScreen, recordScreen, usbStatus } from "./adb.js";
+import { abrirCamaraTelefono, captureScreen, copiarMedio, imeiDelDispositivoConectado, leerMiniatura, listarMedios, mimeDeMedio, mirrorScreen, recordScreen, telefonoListo, traerFotoNueva, usbStatus } from "./adb.js";
 import { dniDesdeDirectorio } from "./directorio.js";
 import { datosExpediente, datosUsuario, dniConfigurado, mensajeSinSigi, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
 import { etiquetaDependencia } from "./sigi-map.js";
@@ -336,6 +341,56 @@ const casePatch = z.object({
   notas: z.string().trim().max(2000).optional(),
 });
 
+app.get("/api/cases/:id/aportante/dni", (req, res) => {
+  const file = rutaFotoDni(req.params.id);
+  if (!file) {
+    res.status(404).json({ error: "Todavía no hay una foto del DNI." });
+    return;
+  }
+  res.type(file.endsWith(".png") ? "image/png" : "image/jpeg");
+  createReadStream(file).pipe(res);
+});
+
+app.put("/api/cases/:id/aportante", upload.single("foto"), async (req, res) => {
+  const caseId = Array.isArray(req.params.id) ? (req.params.id[0] ?? "") : req.params.id;
+  const error = errorAportante(req.body);
+  const temp = req.file?.path;
+  if (error) {
+    if (temp && existsSync(temp)) unlinkSync(temp);
+    res.status(400).json({ error });
+    return;
+  }
+  if (!caseBundle(caseId).cause) {
+    if (temp && existsSync(temp)) unlinkSync(temp);
+    res.status(404).json({ error: "No encontramos esa causa." });
+    return;
+  }
+  try {
+    if (temp) {
+      const mensaje = await guardarFotoDni(caseId, temp, String(req.body.dni ?? ""));
+      if (mensaje) {
+        res.status(400).json({ error: mensaje });
+        return;
+      }
+    } else if (!rutaFotoDni(caseId)) {
+      res.status(400).json({ error: "Sacá o subí una foto del DNI del aportante." });
+      return;
+    }
+    const cause = await updateCase(caseId, {
+      aportante: { ...normalizarAportante(req.body), dniFoto: true },
+    });
+    if (!cause) {
+      res.status(404).json({ error: "No encontramos esa causa." });
+      return;
+    }
+    res.json({ case: cause });
+  } catch (reason) {
+    res.status(400).json({ error: reason instanceof Error ? reason.message : "No se pudo guardar la foto del DNI." });
+  } finally {
+    if (temp && existsSync(temp)) unlinkSync(temp);
+  }
+});
+
 app.patch("/api/cases/:id", (req, res) => {
   const parsed = casePatch.safeParse(req.body);
   if (!parsed.success) {
@@ -444,6 +499,98 @@ app.get("/api/usb/status", async (_req, res) => {
   res.json(await usbStatus());
 });
 
+app.get("/api/usb/media", async (req, res) => {
+  const parsed = z
+    .object({
+      serial: z.string(),
+      tipo: z.enum(["imagen", "video"]),
+    })
+    .safeParse({ serial: req.query.serial, tipo: req.query.tipo });
+  if (!parsed.success) {
+    res.status(400).json({ error: "Indicá el teléfono y si buscás imágenes o videos." });
+    return;
+  }
+  try {
+    const files = await listarMedios(parsed.data.serial, parsed.data.tipo);
+    res.json({ files });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo leer el teléfono." });
+  }
+});
+
+app.get("/api/usb/preview", async (req, res) => {
+  const parsed = z
+    .object({
+      serial: z.string(),
+      tipo: z.enum(["imagen", "video"]),
+      id: z.string().regex(/^\d{1,12}$/),
+    })
+    .safeParse({ serial: req.query.serial, tipo: req.query.tipo, id: req.query.id });
+  if (!parsed.success) {
+    res.status(400).end();
+    return;
+  }
+  const folder = path.join(dataDir, "previews");
+  mkdirSync(folder, { recursive: true });
+  const nombre = createHash("sha256").update(`${parsed.data.serial}|${parsed.data.tipo}|${parsed.data.id}`).digest("hex").slice(0, 32);
+  const archivo = path.join(folder, `${nombre}.jpg`);
+  try {
+    if (!existsSync(archivo) || statSync(archivo).size < 32) {
+      writeFileSync(archivo, await leerMiniatura(parsed.data.serial, parsed.data.tipo, parsed.data.id));
+    }
+    const bytes = statSync(archivo);
+    if (bytes.size < 32) {
+      res.status(404).end();
+      return;
+    }
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.sendFile(archivo);
+  } catch {
+    if (existsSync(archivo) && statSync(archivo).size < 32) unlinkSync(archivo);
+    res.status(404).end();
+  }
+});
+
+app.post("/api/usb/camera", async (req, res) => {
+  try {
+    const body = z.object({ serial: z.string().optional() }).parse(req.body ?? {});
+    const serial = await telefonoListo(body.serial ?? "");
+    const paths = await abrirCamaraTelefono(serial);
+    res.json({ serial, paths });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo abrir la cámara del teléfono." });
+  }
+});
+
+app.post("/api/usb/camera/foto", async (req, res) => {
+  const temp = path.join(uploadDir, `${randomUUID()}.img`);
+  try {
+    const body = z
+      .object({
+        serial: z.string(),
+        paths: z.array(z.string().max(500)).max(500),
+      })
+      .parse(req.body);
+    const traida = await traerFotoNueva(body.serial, body.paths, temp);
+    if (!traida) {
+      if (existsSync(temp)) unlinkSync(temp);
+      res.status(204).end();
+      return;
+    }
+    const archivo = `${temp}${traida.mime === "image/png" ? ".png" : ".jpg"}`;
+    renameSync(temp, archivo);
+    res.setHeader("Content-Type", traida.mime);
+    res.sendFile(archivo, (error) => {
+      if (existsSync(archivo)) unlinkSync(archivo);
+      if (error && !res.headersSent) res.status(400).json({ error: "No se pudo leer la foto del teléfono." });
+    });
+  } catch (error) {
+    if (existsSync(temp)) unlinkSync(temp);
+    res.status(400).json({ error: error instanceof Error ? error.message : "No se pudo traer la foto del teléfono." });
+  }
+});
+
 app.post("/api/usb/mirror", async (req, res) => {
   try {
     const body = z.object({ serial: z.string() }).parse(req.body);
@@ -526,7 +673,75 @@ app.post("/api/cases/:id/usb/record", async (req, res) => {
   }
 });
 
+app.post("/api/cases/:id/usb/import", async (req, res) => {
+  const caseId = Array.isArray(req.params.id) ? (req.params.id[0] ?? "") : req.params.id;
+  try {
+    const body = z
+      .object({
+        serial: z.string(),
+        tipo: z.enum(["imagen", "video"]),
+        paths: z.array(z.string().min(1).max(500)).min(1).max(40),
+        category: category.default("otro"),
+        note: z.string().max(2000).default(""),
+        deviceName: z.string().max(160).default(""),
+      })
+      .parse(req.body);
+    if (!caseBundle(caseId).cause) {
+      res.status(404).json({ error: "No encontramos esa causa." });
+      return;
+    }
+    const evidence = [];
+    const errors: string[] = [];
+    for (const remote of body.paths) {
+      const ext = path.posix.extname(remote).replace(/^\./, "") || (body.tipo === "imagen" ? "jpg" : "mp4");
+      const temp = path.join(uploadDir, `${randomUUID()}.${ext}`);
+      try {
+        await copiarMedio(body.serial, remote, temp, body.tipo);
+        const nombre = path.posix.basename(remote);
+        const record = await saveStationCapture({
+          caseId,
+          filename: nombre,
+          mime: mimeDeMedio(remote),
+          sha256: await sha256File(temp),
+          size: statSync(temp).size,
+          category: body.category,
+          note: body.note || (body.tipo === "imagen" ? "Imagen copiada del teléfono por cable USB." : "Video copiado del teléfono por cable USB."),
+          deviceId: body.serial,
+          deviceName: body.deviceName || body.serial,
+          tempPath: temp,
+          source: "dispositivo",
+        });
+        if (!record) {
+          errors.push(`${nombre}: no se encontró la causa.`);
+          continue;
+        }
+        evidence.push(record);
+      } catch (error) {
+        if (existsSync(temp)) unlinkSync(temp);
+        errors.push(error instanceof Error ? error.message : "No se pudo copiar un archivo.");
+      }
+    }
+    if (evidence.length === 0) {
+      res.status(400).json({ error: errors[0] || "No se pudo copiar ningún archivo." });
+      return;
+    }
+    res.json({ evidence, errors });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "No se pudieron copiar los archivos." });
+  }
+});
+
 app.post("/api/cases/:id/package", async (req, res) => {
+  const cause = caseBundle(req.params.id).cause;
+  if (!cause) {
+    res.status(404).json({ error: "No encontramos esa causa." });
+    return;
+  }
+  const faltante = errorAportante(cause.aportante);
+  if (faltante || !cause.aportante.dniFoto) {
+    res.status(400).json({ error: faltante || "Sacá o subí una foto del DNI del aportante." });
+    return;
+  }
   try {
     const packed = await writeCasePackage(req.params.id);
     if (!packed) {
@@ -545,7 +760,43 @@ app.get("/api/cases/:id/package/zip", (req, res) => {
     res.status(404).json({ error: "Todavía no hay un paquete de esta causa." });
     return;
   }
-  res.download(zipPath, "evidencia.zip");
+  const cause = caseBundle(req.params.id).cause;
+  const nombre = cause ? `${nombreCarpetaExpediente(cause.expediente)}.zip` : "expediente.zip";
+  res.download(zipPath, nombre);
+});
+
+app.get("/api/cases/:id/consentimiento", async (req, res) => {
+  const bundle = caseBundle(req.params.id);
+  const cause = bundle.cause;
+  if (!cause) {
+    res.status(404).json({ error: "No encontramos esa causa." });
+    return;
+  }
+  const faltante = errorAportante(cause.aportante);
+  if (faltante || !cause.aportante.dniFoto) {
+    res.status(400).json({ error: faltante || "Sacá o subí una foto del DNI del aportante." });
+    return;
+  }
+  try {
+    const docx = await materialConsentimiento(cause);
+    const nombre = `consentimiento-${nombreCarpetaExpediente(cause.expediente)}.docx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${nombre}"`);
+    res.send(docx);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "No se pudo armar el consentimiento." });
+  }
+});
+
+app.get("/api/cases/:id/package/acta", (req, res) => {
+  const docxPath = packagePath(req.params.id, "acta-judicial.docx");
+  if (!existsSync(docxPath)) {
+    res.status(404).json({ error: "Todavía no hay un acta de esta causa." });
+    return;
+  }
+  const cause = caseBundle(req.params.id).cause;
+  const nombre = cause ? `acta-${nombreCarpetaExpediente(cause.expediente)}.docx` : "acta-judicial.docx";
+  res.download(docxPath, nombre);
 });
 
 app.get("/api/cases/:id/package/informe", (req, res) => {
@@ -576,7 +827,7 @@ app.get("/api/cases/:id/export", async (req, res, next) => {
     const archive = archiver("zip", { zlib: { level: 9 } });
     archive.on("error", next);
     archive.pipe(res);
-    fillArchive(archive, bundle.cause, bundle);
+    await fillArchive(archive, bundle.cause, bundle);
     await archive.finalize();
   } catch (error) {
     next(error);
@@ -763,11 +1014,13 @@ function packagePath(caseId: string, name: string): string {
   return path.join(dataDir, "exports", caseId, name);
 }
 
-function fillArchive(
+async function fillArchive(
   archive: ReturnType<typeof archiver>,
   cause: NonNullable<ReturnType<typeof caseBundle>["cause"]>,
   bundle: ReturnType<typeof caseBundle>,
-): void {
+): Promise<Buffer> {
+  const carpeta = nombreCarpetaExpediente(cause.expediente);
+  const dentro = (name: string) => `${carpeta}/${name}`;
   const manifest = {
     sistema: "EVIDIA",
     version: PROTOCOL_VERSION,
@@ -788,7 +1041,12 @@ function fillArchive(
       nombre: item.filename,
       tipo: item.mime,
       categoria: labelCategory(item.category),
-      origen: item.source === "pantalla" ? "captura de pantalla por USB" : "archivo enviado por la app",
+      origen:
+        item.source === "pantalla"
+          ? "captura de pantalla por USB"
+          : item.source === "dispositivo"
+            ? "archivo del teléfono copiado por USB"
+            : "archivo enviado por la app",
       bytes: item.size,
       sha256: item.sha256,
       sha256InformadaPorTelefono: item.claimedSha256,
@@ -798,15 +1056,26 @@ function fillArchive(
       dispositivo: item.deviceName,
       aportante: item.contributorName,
       nota: item.note,
-      archivoEnPaquete: `archivos/${item.storedName}`,
+      archivoEnPaquete: dentro(`archivos/${item.storedName}`),
     })),
   };
-  archive.append(JSON.stringify(manifest, null, 2), { name: "manifiesto.json" });
-  archive.append(actaTexto(cause, bundle.evidence), { name: "acta-recepcion.txt" });
+  const acta = await materialActa({
+    cause,
+    evidence: bundle.evidence,
+    sessions: bundle.sessions,
+    generadoEn: manifest.exportadoEn,
+  });
+  archive.append(JSON.stringify(manifest, null, 2), { name: dentro("manifiesto.json") });
+  archive.append(acta.texto, { name: dentro("acta-judicial.txt") });
+  archive.append(acta.docx, { name: dentro("acta-judicial.docx") });
+  archive.append(await materialConsentimiento(cause, manifest.exportadoEn), { name: dentro("consentimiento.docx") });
+  const foto = rutaFotoDni(cause.id);
+  if (foto) archive.file(foto, { name: dentro(`foto-dni${path.extname(foto)}`) });
   for (const item of bundle.evidence) {
     const filePath = evidenceFilePath(item);
-    if (existsSync(filePath)) archive.file(filePath, { name: `archivos/${item.storedName}` });
+    if (existsSync(filePath)) archive.file(filePath, { name: dentro(`archivos/${item.storedName}`) });
   }
+  return acta.docx;
 }
 
 async function writeCasePackage(caseId: string): Promise<{ sha256: string } | undefined> {
@@ -816,16 +1085,20 @@ async function writeCasePackage(caseId: string): Promise<{ sha256: string } | un
   const folder = path.join(dataDir, "exports", caseId);
   mkdirSync(folder, { recursive: true });
   const zipPath = path.join(folder, "evidencia.zip");
-  await new Promise<void>((resolve, reject) => {
+  const actaDocx = await new Promise<Buffer>((resolve, reject) => {
     const output = createWriteStream(zipPath);
     const archive = archiver("zip", { zlib: { level: 9 } });
-    output.on("close", () => resolve());
     output.on("error", reject);
     archive.on("error", reject);
     archive.pipe(output);
-    fillArchive(archive, bundle.cause!, bundle);
-    archive.finalize().catch(reject);
+    fillArchive(archive, bundle.cause!, bundle)
+      .then((docx) => {
+        output.on("close", () => resolve(docx));
+        return archive.finalize();
+      })
+      .catch(reject);
   });
+  writeFileSync(path.join(folder, "acta-judicial.docx"), actaDocx);
   const sha256 = await sha256File(zipPath);
   await escribirInformePdf(path.join(folder, "informe.pdf"), {
     cause: bundle.cause,
@@ -835,46 +1108,6 @@ async function writeCasePackage(caseId: string): Promise<{ sha256: string } | un
     generadoEn: new Date().toISOString(),
   });
   return { sha256 };
-}
-
-function actaTexto(
-  cause: NonNullable<ReturnType<typeof caseBundle>["cause"]>,
-  evidence: ReturnType<typeof caseBundle>["evidence"],
-): string {
-  const lines = [
-    "EVIDIA — ACTA DE RECEPCIÓN DE EVIDENCIA DIGITAL",
-    "",
-    `Carátula: ${cause.caratula}`,
-    `Expediente: ${cause.expediente || "—"}`,
-    `Tipo: ${labelCaseType(cause.tipo)}`,
-    `Dependencia del expediente: ${cause.dependencia || "—"}`,
-    `Oficina de carga: ${cause.oficina || "—"}`,
-    `Proceso: ${cause.proceso || "—"}`,
-    `Responsable de la recepción: ${cause.responsable || "—"}`,
-    `Exportado: ${new Date().toISOString()}`,
-    "",
-    "Los archivos llegan de dos maneras: los elige la persona aportante en la app, o los captura esta estación desde la pantalla del teléfono conectado por USB.",
-    "La huella SHA-256 de cada archivo se calcula otra vez al guardarlo en esta estación.",
-    "",
-  ];
-  if (evidence.length === 0) lines.push("No hay archivos recibidos.");
-  evidence.forEach((item, index) => {
-    lines.push(
-      `${index + 1}. ${item.filename}`,
-      `   Categoría: ${labelCategory(item.category)}`,
-      `   SHA-256 del archivo recibido: ${item.sha256}`,
-      `   SHA-256 informada por el teléfono: ${item.claimedSha256}`,
-      `   Huella verificada: ${item.sha256Verified ? "sí" : "no coincide"}`,
-      `   Capturado: ${item.capturedAt}`,
-      `   Recibido: ${item.receivedAt}`,
-      `   Dispositivo: ${item.deviceName}`,
-      `   Origen: ${item.source === "pantalla" ? "captura de pantalla por USB" : "archivo enviado por la app"}`,
-      `   Aportante: ${item.contributorName || "—"}`,
-      `   Nota: ${item.note || "—"}`,
-      "",
-    );
-  });
-  return lines.join("\n");
 }
 
 function nextError(res: Response) {

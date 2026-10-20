@@ -19,6 +19,66 @@ export const EVIDENCE_CATEGORIES = [
 
 export type EvidenceCategory = (typeof EVIDENCE_CATEGORIES)[number]["id"];
 
+export const CARACTERES_APORTANTE = [
+  { id: "testimonial", label: "Testimonial" },
+  { id: "declaracion_imputado", label: "Declaración de imputado" },
+] as const;
+
+export type CaracterAportante = (typeof CARACTERES_APORTANTE)[number]["id"];
+
+export type Aportante = {
+  nombre: string;
+  dni: string;
+  caracter: CaracterAportante | "";
+  caracterDetalle: string;
+  dniFoto: boolean;
+};
+
+export function aportanteVacio(): Aportante {
+  return { nombre: "", dni: "", caracter: "", caracterDetalle: "", dniFoto: false };
+}
+
+export function labelCaracter(caracter: string, _detalle = ""): string {
+  if (!caracter) return "";
+  return CARACTERES_APORTANTE.find((item) => item.id === caracter)?.label ?? "";
+}
+
+export function nombreCarpetaExpediente(expediente: string): string {
+  const texto = expediente.trim();
+  const match = texto.match(/^(\d+)\s*[/\\]\s*(\d{4})/);
+  if (match) return `${match[1]}-${match[2]}`;
+  const limpio = texto
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return limpio.slice(0, 80) || "expediente";
+}
+
+export function formatoDni(dni: string): string {
+  const digits = dni.replace(/\D/g, "");
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+export function normalizarAportante(value: Partial<Aportante> | null | undefined): Aportante {
+  const caracter = CARACTERES_APORTANTE.some((item) => item.id === value?.caracter) ? (value?.caracter ?? "") : "";
+  return {
+    nombre: String(value?.nombre ?? "").trim().replace(/\s+/g, " "),
+    dni: String(value?.dni ?? "").replace(/\D/g, ""),
+    caracter,
+    caracterDetalle: "",
+    dniFoto: value?.dniFoto === true,
+  };
+}
+
+export function errorAportante(value: Partial<Aportante> | null | undefined): string {
+  const aportante = normalizarAportante(value);
+  if (aportante.nombre.split(" ").filter(Boolean).length < 2) return "Escribí nombres y apellidos completos.";
+  if (!/^\d{7,8}$/.test(aportante.dni)) return "El DNI tiene que tener 7 u 8 números.";
+  if (!aportante.caracter) return "Elegí el carácter de la persona aportante.";
+  return "";
+}
+
 export type CaseRecord = {
   id: string;
   caratula: string;
@@ -29,6 +89,7 @@ export type CaseRecord = {
   proceso: string;
   responsable: string;
   notas: string;
+  aportante: Aportante;
   createdAt: string;
   updatedAt: string;
 };
@@ -90,7 +151,7 @@ export type EvidenceRecord = {
   receivedAt: string;
   category: EvidenceCategory;
   note: string;
-  source: "camera" | "gallery" | "document" | "pantalla";
+  source: "camera" | "gallery" | "document" | "pantalla" | "dispositivo";
   deviceId: string;
   deviceName: string;
   contributorName: string;

@@ -1,13 +1,16 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type {
-  CaseRecord,
-  CatalogItem,
-  EvidenceRecord,
-  PairingSession,
-  PullRequest,
+import {
+  aportanteVacio,
+  normalizarAportante,
+  type CaseRecord,
+  type CatalogItem,
+  type EvidenceRecord,
+  type PairingSession,
+  type PullRequest,
 } from "@espejo/shared";
+import { borrarFotoDni, rutaFotoDni } from "./dni-foto.js";
 import { dataDir, dbPath, ensureDataDirs, filesDir } from "./paths.js";
 
 export type OperatorSession = {
@@ -63,6 +66,7 @@ function readDb(): Database {
       ...item,
       oficina: item.oficina ?? "",
       proceso: item.proceso ?? "",
+      aportante: { ...normalizarAportante(item.aportante), dniFoto: Boolean(rutaFotoDni(item.id)) },
     })),
   };
 }
@@ -138,11 +142,11 @@ export function dniDelUsuario(input: {
 }
 
 export function createCase(
-  input: Omit<CaseRecord, "id" | "createdAt" | "updatedAt">,
+  input: Omit<CaseRecord, "id" | "createdAt" | "updatedAt" | "aportante">,
 ): Promise<CaseRecord> {
   return mutate((db) => {
     const now = new Date().toISOString();
-    const record: CaseRecord = { ...input, id: randomUUID(), createdAt: now, updatedAt: now };
+    const record: CaseRecord = { ...input, aportante: aportanteVacio(), id: randomUUID(), createdAt: now, updatedAt: now };
     db.cases.unshift(record);
     return record;
   });
@@ -176,6 +180,7 @@ export function deleteCase(id: string): Promise<boolean> {
     if (!removed) return false;
     rmSync(path.join(filesDir, id), { recursive: true, force: true });
     rmSync(path.join(dataDir, "exports", id), { recursive: true, force: true });
+    borrarFotoDni(id);
     return true;
   });
 }
@@ -437,6 +442,7 @@ export function saveStationCapture(input: {
   deviceId: string;
   deviceName: string;
   tempPath: string;
+  source?: EvidenceRecord["source"];
 }): Promise<EvidenceRecord | undefined> {
   return mutate((db) => {
     const cause = db.cases.find((item) => item.id === input.caseId);
@@ -468,7 +474,7 @@ export function saveStationCapture(input: {
       receivedAt: now,
       category: input.category,
       note: input.note,
-      source: "pantalla",
+      source: input.source ?? "pantalla",
       deviceId: input.deviceId,
       deviceName: input.deviceName,
       contributorName: "",

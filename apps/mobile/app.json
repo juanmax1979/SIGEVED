@@ -24,7 +24,8 @@
           "cameraPermission": "EVIDIA usa la cámara para fotografiar o filmar evidencia que vos decidas guardar.",
           "microphonePermission": "EVIDIA usa el micrófono solo cuando grabás un video como evidencia."
         }
-      ]
+      ],
+      "./plugins/withCleartextTraffic"
     ],
     "ios": {
       "supportsTablet": true,

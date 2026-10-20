@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { createWriteStream } from "node:fs";
 import type { Writable } from "node:stream";
-import { formatBytes, labelCaseType, labelCategory, type CaseRecord, type EvidenceRecord, type PairingSession } from "@espejo/shared";
+import { formatBytes, formatoDni, labelCaracter, labelCaseType, labelCategory, nombreCarpetaExpediente, type CaseRecord, type EvidenceRecord, type PairingSession } from "@espejo/shared";
 
 const require = createRequire(import.meta.url);
 const PDFDocument = require("pdfkit") as new (options?: Record<string, unknown>) => Pdf;
@@ -62,7 +62,9 @@ function fecha(iso: string): string {
 }
 
 function origen(item: EvidenceRecord): string {
-  return item.source === "pantalla" ? "Captura de pantalla por USB" : "Archivo enviado por la app";
+  if (item.source === "pantalla") return "Captura de pantalla por USB";
+  if (item.source === "dispositivo") return "Archivo del teléfono copiado por USB";
+  return "Archivo enviado por la app";
 }
 
 export function escribirInformePdf(filePath: string, data: InformePdf): Promise<void> {
@@ -80,12 +82,14 @@ export function escribirInformePdf(filePath: string, data: InformePdf): Promise<
   const output = createWriteStream(filePath);
   doc.pipe(output);
 
+  const paquete = `${nombreCarpetaExpediente(data.cause.expediente)}.zip`;
   let y = encabezado(doc, false);
-  y = titulo(doc, y);
+  y = titulo(doc, y, paquete);
   y = ficha(doc, y, data);
+  y = personaAportante(doc, y, data.cause);
   y = dispositivos(doc, y, data.sessions);
   y = archivos(doc, y, data.evidence);
-  huella(doc, y, data.sha256);
+  huella(doc, y, data.sha256, paquete);
   pie(doc);
   doc.end();
 
@@ -121,11 +125,11 @@ function asegurar(doc: Pdf, y: number, alto: number): number {
   return nuevaPagina(doc);
 }
 
-function titulo(doc: Pdf, y: number): number {
+function titulo(doc: Pdf, y: number, paquete: string): number {
   doc.fillColor(ink).font("Helvetica-Bold").fontSize(16).text("Informe de la diligencia", left, y, { width });
   y = doc.y + 4;
   doc.fillColor(muted).font("Helvetica").fontSize(9).text(
-    "Este documento queda fuera de evidencia.zip para que la huella del paquete no cambie al leerlo.",
+    `Este documento queda fuera de ${paquete} para que la huella del paquete no cambie al leerlo.`,
     left,
     y,
     { width },
@@ -146,6 +150,16 @@ function ficha(doc: Pdf, y: number, data: InformePdf): number {
     ["Archivos en el paquete", String(data.evidence.length)],
   ];
   return bloque(doc, y, "Causa", filas);
+}
+
+function personaAportante(doc: Pdf, y: number, cause: CaseRecord): number {
+  const aportante = cause.aportante;
+  const filas: [string, string][] = [
+    ["Nombres y apellidos", aportante?.nombre || "—"],
+    ["DNI", aportante?.dni ? formatoDni(aportante.dni) : "—"],
+    ["Carácter", aportante?.caracter ? labelCaracter(aportante.caracter, aportante.caracterDetalle) : "—"],
+  ];
+  return bloque(doc, y, "Persona aportante", filas);
 }
 
 function dispositivos(doc: Pdf, y: number, sessions: PairingSession[]): number {
@@ -209,17 +223,17 @@ function archivos(doc: Pdf, y: number, evidence: EvidenceRecord[]): number {
   return y + 6;
 }
 
-function huella(doc: Pdf, y: number, sha256: string): void {
+function huella(doc: Pdf, y: number, sha256: string, paquete: string): void {
   const alto = 78;
   y = asegurar(doc, y, alto);
   doc.save();
   doc.roundedRect(left, y, width, alto, 8).fillColor(soft).fill();
   doc.rect(left, y, 5, alto).fillColor(blue).fill();
   doc.restore();
-  doc.fillColor(blue).font("Helvetica-Bold").fontSize(9).text("HUELLA SHA-256 DE EVIDENCIA.ZIP", left + 18, y + 12, { characterSpacing: 0.4, lineBreak: false });
+  doc.fillColor(blue).font("Helvetica-Bold").fontSize(9).text(`HUELLA SHA-256 DE ${paquete.toUpperCase()}`, left + 18, y + 12, { characterSpacing: 0.4, lineBreak: false });
   doc.fillColor(ink).font("Courier").fontSize(9).text(sha256, left + 18, y + 30, { width: width - 36 });
   doc.fillColor(muted).font("Helvetica").fontSize(8).text(
-    "Esta huella corresponde al paquete completo. Dentro del zip, manifiesto.json y acta-recepcion.txt traen la huella de cada archivo.",
+    "Esta huella corresponde al paquete completo. Dentro del zip, manifiesto.json, acta-judicial.docx y consentimiento.docx traen la constancia de cada archivo.",
     left + 18,
     y + 48,
     { width: width - 36 },

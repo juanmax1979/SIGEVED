@@ -16,3 +16,5 @@ apps/mobile/ios/
 *.tsbuildinfo
 admin-token.txt
 apps/admin/tools/
+*.apk
+*.ipa

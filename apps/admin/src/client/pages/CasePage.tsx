@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  errorAportante,
   formatBytes,
   labelCategory,
+  nombreCarpetaExpediente,
   type CaseRecord,
   type EvidenceRecord,
   type PairingSession,
 } from "@espejo/shared";
 import { api } from "../api";
+import { AportantePanel } from "./AportantePanel";
 import { UsbPanel } from "./UsbPanel";
 
 export function CasePage() {
@@ -23,6 +26,7 @@ export function CasePage() {
   const [packing, setPacking] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [editingAportante, setEditingAportante] = useState(false);
 
   function reload() {
     api<{ cause: CaseRecord; evidence: EvidenceRecord[]; sessions: PairingSession[] }>(`/api/cases/${id}`)
@@ -30,6 +34,7 @@ export function CasePage() {
         setCause(data.cause);
         setEvidence(data.evidence);
         setSessions(data.sessions);
+        if (errorAportante(data.cause.aportante) || !data.cause.aportante.dniFoto) setEditingAportante(true);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo abrir la causa."));
   }
@@ -99,6 +104,16 @@ export function CasePage() {
           </p>
         </div>
         <div className="row">
+          <button
+            className="btn-ghost"
+            type="button"
+            onClick={() => {
+              setEditingAportante(true);
+              document.getElementById("aportante")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          >
+            Datos del aportante
+          </button>
           <button className="btn-danger" type="button" onClick={() => setConfirming(true)}>
             Eliminar causa
           </button>
@@ -122,6 +137,12 @@ export function CasePage() {
         </section>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
+      <AportantePanel
+        cause={cause}
+        editing={editingAportante}
+        onEditing={setEditingAportante}
+        onSaved={setCause}
+      />
       <section className="panel" style={{ marginBottom: 18 }}>
         <h2>Conectar un teléfono</h2>
         <p className="meta">
@@ -161,10 +182,12 @@ export function CasePage() {
         {cause.notas ? <p className="meta">{cause.notas}</p> : null}
         {packageHash ? (
           <div className="meta">
-            <div>Huella SHA-256 del paquete evidencia.zip</div>
+            <div>Huella SHA-256 del paquete {nombreCarpetaExpediente(cause.expediente)}.zip</div>
             <div className="hash">{packageHash}</div>
             <div>
               <a href={`/api/cases/${id}/package/zip`}>Descargar zip</a>
+              {" · "}
+              <a href={`/api/cases/${id}/package/acta`}>Descargar acta (Word)</a>
               {" · "}
               <a href={`/api/cases/${id}/package/informe`}>Descargar informe PDF</a>
             </div>
@@ -192,7 +215,7 @@ export function CasePage() {
                     <div>{item.filename}</div>
                     <div className="meta">
                       {formatBytes(item.size)} · {new Date(item.receivedAt).toLocaleString()}
-                      {item.source === "pantalla" ? " · pantalla por USB" : ""}
+                      {item.source === "pantalla" ? " · pantalla por USB" : item.source === "dispositivo" ? " · archivo del teléfono" : ""}
                     </div>
                     {item.note ? <div className="meta">{item.note}</div> : null}
                   </td>
@@ -200,7 +223,7 @@ export function CasePage() {
                   <td>
                     <div className="hash">{item.sha256}</div>
                     <div className={item.sha256Verified ? "ok" : "warn"}>
-                      {item.source === "pantalla"
+                      {item.source === "pantalla" || item.source === "dispositivo"
                         ? "Huella calculada en esta estación"
                         : item.sha256Verified
                           ? "Coincide con el teléfono"

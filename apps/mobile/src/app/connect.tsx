@@ -6,6 +6,14 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { parsePairPayload, useStore } from "../lib/store";
 import { theme } from "../theme";
 
+function mensajeConexion(error: unknown): string {
+  const text = error instanceof Error ? error.message : "No se pudo conectar.";
+  if (/CLEARTEXT|cleartext/i.test(text)) {
+    return "El teléfono bloqueó la conexión HTTP a la estación. Instalá la versión nueva de EVIDIA: esa versión permite la conexión en la red local.";
+  }
+  return text;
+}
+
 export default function ConnectScreen() {
   const router = useRouter();
   const store = useStore();
@@ -49,7 +57,7 @@ export default function ConnectScreen() {
       });
       router.replace("/session");
     } catch (error) {
-      Alert.alert("Conexión", error instanceof Error ? error.message : "No se pudo conectar.");
+      Alert.alert("Conexión", mensajeConexion(error));
     }
   }
 

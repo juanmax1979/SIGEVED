@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { causaDeOficina, mismaDependencia, type CaseRecord } from "@espejo/shared";
 import { api } from "../api";
 import { SigiBar, type SigiSession } from "./SigiBar";
@@ -132,6 +132,7 @@ function TrashIcon() {
 }
 
 function NewCase({ sigi, onCreated }: { sigi: SigiSession | null; onCreated: () => Promise<void> }) {
+  const navigate = useNavigate();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [looking, setLooking] = useState(false);
@@ -176,7 +177,7 @@ function NewCase({ sigi, onCreated }: { sigi: SigiSession | null; onCreated: () 
     setPending(true);
     setError("");
     try {
-      await api("/api/cases", {
+      const created = await api<{ case: CaseRecord }>("/api/cases", {
         method: "POST",
         body: JSON.stringify({
           ...form,
@@ -186,6 +187,7 @@ function NewCase({ sigi, onCreated }: { sigi: SigiSession | null; onCreated: () 
         }),
       });
       await onCreated();
+      navigate(`/causas/${created.case.id}`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo crear la causa.");
     } finally {
