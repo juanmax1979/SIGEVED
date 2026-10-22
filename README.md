@@ -1,4 +1,4 @@
-# Espejo PJCH
+# SIGEVED
 
 Estación local y aplicación móvil para recibir evidencia digital en una investigación. La persona aportante elige en su teléfono fotos, videos y documentos. La estación, abierta en la computadora del equipo, descarga esos archivos por la red local.
 
