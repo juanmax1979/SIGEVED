@@ -14,6 +14,7 @@
         {
           "cameraPermission": "SIGVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
           "microphonePermission": "SIGVED usa el micrófono solo cuando grabás un video como evidencia.",
+          "barcodeScannerEnabled": true,
           "recordAudioAndroid": true
         }
       ],
@@ -21,7 +22,7 @@
         "expo-image-picker",
         {
           "photosPermission": "SIGVED accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
-          "cameraPermission": "SIGVED usa la cámara para fotografiar o filmar evidencia que vos decidas guardar.",
+          "cameraPermission": "SIGVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
           "microphonePermission": "SIGVED usa el micrófono solo cuando grabás un video como evidencia."
         }
       ],
@@ -30,8 +31,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.espejo.pjch",
+      "buildNumber": "1",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "SIGVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
+        "NSMicrophoneUsageDescription": "SIGVED usa el micrófono solo cuando grabás un video como evidencia.",
+        "NSPhotoLibraryUsageDescription": "SIGVED accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
+        "NSLocalNetworkUsageDescription": "SIGVED se conecta a la estación de la causa en la red local para enviar solo los archivos que vos confirmes.",
         "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         }
       }

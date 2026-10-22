@@ -2,14 +2,17 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { parsePairPayload, useStore } from "../lib/store";
 import { theme } from "../theme";
 
 function mensajeConexion(error: unknown): string {
   const text = error instanceof Error ? error.message : "No se pudo conectar.";
-  if (/CLEARTEXT|cleartext/i.test(text)) {
+  if (/CLEARTEXT|cleartext|App Transport Security|ATS/i.test(text)) {
     return "El teléfono bloqueó la conexión HTTP a la estación. Instalá la versión nueva de SIGVED: esa versión permite la conexión en la red local.";
+  }
+  if (/local network|red local|NSURLErrorDomain|kCFErrorDomainCFNetwork|-1009/i.test(text)) {
+    return "El iPhone bloqueó la red local. En Ajustes, SIGVED, activá Red local, y revisá que el teléfono y la computadora estén en el mismo Wi-Fi.";
   }
   return text;
 }
@@ -84,7 +87,8 @@ export default function ConnectScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
       <Text style={styles.lead}>
         La estación solo recibe los archivos que están en SIGVED y que se envían durante esta conexión. Podés cortarla cuando quieras.
       </Text>
@@ -135,12 +139,14 @@ export default function ConnectScreen() {
           </Pressable>
         </>
       )}
-    </View>
+    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 18, gap: 12 },
+  flex: { flex: 1 },
+  screen: { padding: 18, gap: 12 },
   lead: { color: theme.muted, fontSize: 16, lineHeight: 22 },
   label: { fontWeight: "700", color: theme.ink, marginTop: 6 },
   input: {

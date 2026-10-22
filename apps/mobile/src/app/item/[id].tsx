@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { formatBytes, labelCategory } from "../../../../../packages/shared/src/index";
 import { categories, fileFor, useStore } from "../../lib/store";
 import { theme } from "../../theme";
@@ -23,7 +23,8 @@ export default function ItemScreen() {
   const preview = fileFor(item);
 
   return (
-    <ScrollView contentContainerStyle={styles.screen}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
       {item.mime.startsWith("image/") ? <Image source={{ uri: preview.uri }} style={styles.preview} /> : null}
       <Text style={styles.title}>{item.filename}</Text>
       <Text style={styles.meta}>
@@ -73,15 +74,17 @@ export default function ItemScreen() {
         <Text style={styles.deleteText}>Quitar de este teléfono</Text>
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   screen: { padding: 18, gap: 10 },
   preview: { width: "100%", height: 240, borderRadius: 16, backgroundColor: "#efe7da" },
   title: { fontSize: 22, fontWeight: "700", color: theme.ink },
   meta: { color: theme.muted, lineHeight: 20 },
-  hash: { fontFamily: "monospace", fontSize: 12, color: theme.ink },
+  hash: { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 12, color: theme.ink },
   label: { marginTop: 8, fontWeight: "700", color: theme.ink },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1, borderColor: theme.line, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: theme.card },

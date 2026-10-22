@@ -27,6 +27,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "ios:device": "npx eas-cli@latest build --platform ios --profile preview",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"
   },

@@ -40,7 +40,7 @@ const blocks = [
   { type: "h2", text: "3.2. Teléfono y red" },
   { type: "bullet", text: "SIGVED se usa desde la aplicación instalada en el teléfono. El único código que se escanea es el de la causa, dentro de SIGVED, para enviar la evidencia." },
   { type: "bullet", text: "El teléfono y la computadora tienen que verse entre sí. Si el teléfono usa el punto de acceso de la PC, la red de la sesión es la que empieza con 192.168.137." },
-  { type: "bullet", text: "Para la captura por cable hace falta un cable de datos, no solo de carga, y aceptar en el teléfono el aviso «Permitir la depuración por USB»." },
+  { type: "bullet", text: "En Android, la captura por cable usa un cable de datos, no solo de carga, y hay que aceptar en el teléfono el aviso «Permitir la depuración por USB». En iPhone la evidencia se envía por Wi-Fi: el cable no instala SIGVED ni espeja la pantalla." },
   { type: "h2", text: "3.3. Instalar la aplicación" },
   { type: "p", text: "Antes de la diligencia, SIGVED tiene que estar instalada en el teléfono. El archivo es SIGVED-1.0.apk. Se puede instalar de dos maneras." },
   { type: "h2", text: "Por cable USB" },
@@ -56,6 +56,9 @@ const blocks = [
     "Si el teléfono pregunta si el administrador de archivos puede instalar aplicaciones, permitirlo.",
   ] },
   { type: "p", text: "Después de instalarla, SIGVED se abre como cualquier otra aplicación. No hace falta otro programa para iniciarla." },
+  { type: "h2", text: "iPhone" },
+  { type: "p", text: "En un iPhone, SIGVED no se instala copiando un archivo al almacenamiento. Apple exige una compilación firmada con una cuenta de desarrollador y que ese iPhone esté registrado antes de generar el instalable. La evidencia se envía por la red local." },
+  { type: "p", text: "La primera vez que el iPhone se conecta a la estación, iOS pide permiso de Red local. Hay que aceptarlo. Si se rechazó, se activa en Ajustes, SIGVED, Red local. El iPhone y la computadora tienen que estar en el mismo Wi-Fi." },
   { type: "h1", text: "4. Identificación de quien carga la prueba" },
   { type: "ol", items: [
     "Abrir la estación. SIGVED toma el usuario de Windows y el DNI desde Active Directory. No se tipea el DNI.",

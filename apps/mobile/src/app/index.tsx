@@ -1,3 +1,4 @@
+import { Camera } from "expo-camera";
 import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -6,11 +7,13 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatBytes } from "../../../../packages/shared/src/index";
 import { useStore, type LocalEvidence } from "../lib/store";
 import { institutionTitle, theme } from "../theme";
@@ -19,6 +22,7 @@ import { Logo } from "../components/Logo";
 export default function HomeScreen() {
   const router = useRouter();
   const store = useStore();
+  const insets = useSafeAreaInsets();
   const [working, setWorking] = useState(false);
 
   async function keep(assets: ImagePicker.ImagePickerAsset[], source: LocalEvidence["source"]) {
@@ -55,7 +59,18 @@ export default function HomeScreen() {
       Alert.alert("Cámara", "Hace falta permiso para filmar evidencia.");
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["videos"], videoMaxDuration: 300 });
+    if (Platform.OS === "ios") {
+      const microphone = await Camera.requestMicrophonePermissionsAsync();
+      if (!microphone.granted) {
+        Alert.alert("Micrófono", "Hace falta permiso para grabar el audio del video.");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["videos"],
+      videoMaxDuration: 300,
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
+    });
     if (!result.canceled) await keep(result.assets, "camera");
   }
 
@@ -69,6 +84,9 @@ export default function HomeScreen() {
       mediaTypes: ["images", "videos"],
       allowsMultipleSelection: true,
       quality: 1,
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+      videoExportPreset: ImagePicker.VideoExportPreset.Passthrough,
+      shouldDownloadFromNetwork: true,
     });
     if (!result.canceled) await keep(result.assets, "gallery");
   }
@@ -98,7 +116,9 @@ export default function HomeScreen() {
       <Text style={styles.system}>Sistema Integrado de Gestión Voluntario de Evidencia Digital</Text>
       <Text style={styles.institution}>{institutionTitle}</Text>
       <Text style={styles.lead}>
-        Las fotos, videos y documentos quedan en este teléfono hasta que los envíes a la estación. Nada se comparte solo. Si conectan el cable USB, la computadora mira la pantalla y guarda esas capturas.
+        {Platform.OS === "ios"
+          ? "Las fotos, videos y documentos quedan en este iPhone hasta que los envíes a la estación por Wi-Fi. Nada se comparte solo."
+          : "Las fotos, videos y documentos quedan en este teléfono hasta que los envíes a la estación. Nada se comparte solo. Si conectan el cable USB, la computadora mira la pantalla y guarda esas capturas."}
       </Text>
       <View style={styles.actions}>
         <Pressable style={styles.action} onPress={takePhoto}>
@@ -120,7 +140,7 @@ export default function HomeScreen() {
       <FlatList
         data={store.items}
         keyExtractor={(item) => item.localId}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}
         ListEmptyComponent={<Text style={styles.empty}>Todavía no hay evidencia guardada.</Text>}
         renderItem={({ item }) => (
           <Pressable style={styles.card} onPress={() => router.push(`/item/${item.localId}`)}>

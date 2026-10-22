@@ -1,4 +1,4 @@
-const { withAndroidManifest, withDangerousMod } = require("expo/config-plugins");
+const { withAndroidManifest, withDangerousMod, withInfoPlist } = require("expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 
@@ -9,6 +9,19 @@ const NETWORK_SECURITY_CONFIG = `<?xml version="1.0" encoding="utf-8"?>
 `;
 
 function withCleartextTraffic(config) {
+  config = withInfoPlist(config, (mod) => {
+    const ats = mod.modResults.NSAppTransportSecurity ?? {};
+    mod.modResults.NSAppTransportSecurity = {
+      ...ats,
+      NSAllowsArbitraryLoads: true,
+      NSAllowsLocalNetworking: true,
+    };
+    mod.modResults.NSLocalNetworkUsageDescription =
+      "SIGVED se conecta a la estación de la causa en la red local para enviar solo los archivos que vos confirmes.";
+    mod.modResults.ITSAppUsesNonExemptEncryption = false;
+    return mod;
+  });
+
   config = withDangerousMod(config, [
     "android",
     async (mod) => {
