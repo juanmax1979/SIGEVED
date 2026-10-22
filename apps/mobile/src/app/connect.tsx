@@ -9,10 +9,10 @@ import { theme } from "../theme";
 function mensajeConexion(error: unknown): string {
   const text = error instanceof Error ? error.message : "No se pudo conectar.";
   if (/CLEARTEXT|cleartext|App Transport Security|ATS/i.test(text)) {
-    return "El teléfono bloqueó la conexión HTTP a la estación. Instalá la versión nueva de SIGVED: esa versión permite la conexión en la red local.";
+    return "El teléfono bloqueó la conexión HTTP a la estación. Instalá la versión nueva de SIGEVED: esa versión permite la conexión en la red local.";
   }
   if (/local network|red local|NSURLErrorDomain|kCFErrorDomainCFNetwork|-1009/i.test(text)) {
-    return "El iPhone bloqueó la red local. En Ajustes, SIGVED, activá Red local, y revisá que el teléfono y la computadora estén en el mismo Wi-Fi.";
+    return "El iPhone bloqueó la red local. En Ajustes, SIGEVED, activá Red local, y revisá que el teléfono y la computadora estén en el mismo Wi-Fi.";
   }
   return text;
 }
@@ -90,7 +90,7 @@ export default function ConnectScreen() {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
       <Text style={styles.lead}>
-        La estación solo recibe los archivos que están en SIGVED y que se envían durante esta conexión. Podés cortarla cuando quieras.
+        La estación solo recibe los archivos que están en SIGEVED y que se envían durante esta conexión. Podés cortarla cuando quieras.
       </Text>
       <Text style={styles.label}>Cómo querés figurar, si querés</Text>
       <TextInput

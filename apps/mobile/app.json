@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SIGVED",
+    "name": "SIGEVED",
     "slug": "espejo",
     "scheme": "espejo",
     "version": "0.1.0",
@@ -12,8 +12,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "SIGVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
-          "microphonePermission": "SIGVED usa el micrófono solo cuando grabás un video como evidencia.",
+          "cameraPermission": "SIGEVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
+          "microphonePermission": "SIGEVED usa el micrófono solo cuando grabás un video como evidencia.",
           "barcodeScannerEnabled": true,
           "recordAudioAndroid": true
         }
@@ -21,9 +21,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "SIGVED accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
-          "cameraPermission": "SIGVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
-          "microphonePermission": "SIGVED usa el micrófono solo cuando grabás un video como evidencia."
+          "photosPermission": "SIGEVED accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
+          "cameraPermission": "SIGEVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
+          "microphonePermission": "SIGEVED usa el micrófono solo cuando grabás un video como evidencia."
         }
       ],
       "./plugins/withCleartextTraffic"
@@ -34,10 +34,10 @@
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "SIGVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
-        "NSMicrophoneUsageDescription": "SIGVED usa el micrófono solo cuando grabás un video como evidencia.",
-        "NSPhotoLibraryUsageDescription": "SIGVED accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
-        "NSLocalNetworkUsageDescription": "SIGVED se conecta a la estación de la causa en la red local para enviar solo los archivos que vos confirmes.",
+        "NSCameraUsageDescription": "SIGEVED usa la cámara para fotografiar evidencia y para leer el código de la estación.",
+        "NSMicrophoneUsageDescription": "SIGEVED usa el micrófono solo cuando grabás un video como evidencia.",
+        "NSPhotoLibraryUsageDescription": "SIGEVED accede solamente a las fotos y videos que vos elijas para guardarlos como evidencia.",
+        "NSLocalNetworkUsageDescription": "SIGEVED se conecta a la estación de la causa en la red local para enviar solo los archivos que vos confirmes.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true

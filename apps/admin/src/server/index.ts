@@ -823,7 +823,7 @@ app.get("/api/cases/:id/export", async (req, res, next) => {
     bundle.sessions = await sesionesConImei(bundle.sessions);
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     res.setHeader("Content-Type", "application/zip");
-    res.setHeader("Content-Disposition", `attachment; filename="sigved-${stamp}.zip"`);
+    res.setHeader("Content-Disposition", `attachment; filename="sigeved-${stamp}.zip"`);
     const archive = archiver("zip", { zlib: { level: 9 } });
     archive.on("error", next);
     archive.pipe(res);
@@ -1022,7 +1022,7 @@ async function fillArchive(
   const carpeta = nombreCarpetaExpediente(cause.expediente);
   const dentro = (name: string) => `${carpeta}/${name}`;
   const manifest = {
-    sistema: "SIGVED",
+    sistema: "SIGEVED",
     version: PROTOCOL_VERSION,
     exportadoEn: new Date().toISOString(),
     causa: bundle.cause,

@@ -111,9 +111,9 @@ export default function HomeScreen() {
     <View style={styles.screen}>
       <View style={styles.brandBlock}>
         <Logo size={64} />
-        <Text style={styles.brandName}>SIGVED</Text>
+        <Text style={styles.brandName}>S.I.G.E.V.E.D.</Text>
       </View>
-      <Text style={styles.system}>Sistema Integrado de Gestión Voluntario de Evidencia Digital</Text>
+      <Text style={styles.system}>Sistema Integral de Gestión y Extracción Voluntaria de Evidencia Digital</Text>
       <Text style={styles.institution}>{institutionTitle}</Text>
       <Text style={styles.lead}>
         {Platform.OS === "ios"
@@ -182,7 +182,7 @@ function normalizePicked(picked: unknown): File[] {
 const styles = StyleSheet.create({
   screen: { flex: 1, padding: 18, gap: 12 },
   brandBlock: { alignItems: "center", gap: 4, paddingTop: 8 },
-  brandName: { color: theme.ink, fontSize: 28, fontWeight: "800", letterSpacing: 3 },
+  brandName: { color: theme.ink, fontSize: 28, fontWeight: "800", letterSpacing: 1.5 },
   system: { color: theme.muted, fontSize: 15, lineHeight: 21, textAlign: "center" },
   institution: { color: theme.blue, fontSize: 14, fontWeight: "700", textAlign: "center" },
   lead: { color: theme.muted, fontSize: 16, lineHeight: 22 },

@@ -17,7 +17,7 @@ function withCleartextTraffic(config) {
       NSAllowsLocalNetworking: true,
     };
     mod.modResults.NSLocalNetworkUsageDescription =
-      "SIGVED se conecta a la estación de la causa en la red local para enviar solo los archivos que vos confirmes.";
+      "SIGEVED se conecta a la estación de la causa en la red local para enviar solo los archivos que vos confirmes.";
     mod.modResults.ITSAppUsesNonExemptEncryption = false;
     return mod;
   });

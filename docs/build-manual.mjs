@@ -24,44 +24,44 @@ const fecha = "9 de octubre de 2026";
 const blocks = [
   { type: "cover" },
   { type: "h1", text: "1. Para qué sirve este manual" },
-  { type: "p", text: "Este manual describe cómo se usa SIGVED para recibir evidencia digital en una causa. Hay dos puestos: la estación, que se abre en la computadora del equipo, y la app SIGVED, que usa la persona que aporta los archivos desde su teléfono." },
+  { type: "p", text: "Este manual describe cómo se usa SIGEVED para recibir evidencia digital en una causa. Hay dos puestos: la estación, que se abre en la computadora del equipo, y la app SIGEVED, que usa la persona que aporta los archivos desde su teléfono." },
   { type: "p", text: "La estación no se administra desde otra computadora de la red. Se abre en la misma PC donde quedan guardados los archivos, en http://127.0.0.1:4780." },
   { type: "h1", text: "2. Qué hace y qué no hace" },
-  { type: "p", text: "SIGVED recibe los archivos que la persona elige o que captura en el momento, y los guarda en la estación con su huella SHA-256. No lee la bandeja de mensajes, no copia bases de WhatsApp ni de otras aplicaciones, no recupera archivos borrados y no arma una imagen forense del teléfono." },
-  { type: "bullet", text: "Por la app solo salen del teléfono las fotos, los videos y los documentos que la persona incorporó a SIGVED y envió durante una sesión abierta." },
+  { type: "p", text: "SIGEVED recibe los archivos que la persona elige o que captura en el momento, y los guarda en la estación con su huella SHA-256. No lee la bandeja de mensajes, no copia bases de WhatsApp ni de otras aplicaciones, no recupera archivos borrados y no arma una imagen forense del teléfono." },
+  { type: "bullet", text: "Por la app solo salen del teléfono las fotos, los videos y los documentos que la persona incorporó a SIGEVED y envió durante una sesión abierta." },
   { type: "bullet", text: "Por el cable USB, la estación puede ver la pantalla, guardar una captura o grabar lo que se está mostrando. La persona tiene que aceptar la depuración USB en el teléfono." },
   { type: "bullet", text: "Nada se envía a internet. El teléfono y la computadora se hablan por la red local." },
   { type: "h1", text: "3. Antes de empezar" },
   { type: "h2", text: "3.1. Computadora" },
   { type: "bullet", text: "Windows, con Node.js instalado. La primera vez, en la carpeta del sistema, se ejecuta iniciar-estacion.bat. Ese archivo instala lo que falte, prepara la estación y la deja abierta." },
   { type: "bullet", text: "En el navegador de esa misma computadora: http://127.0.0.1:4780." },
-  { type: "bullet", text: "La cuenta de Windows tiene que ser del dominio de la organización. SIGVED lee el DNI del atributo de Active Directory y con ese dato consulta SIGI." },
+  { type: "bullet", text: "La cuenta de Windows tiene que ser del dominio de la organización. SIGEVED lee el DNI del atributo de Active Directory y con ese dato consulta SIGI." },
   { type: "bullet", text: "La conexión a la base de SIGI se configura en la estación. No se escribe en este manual." },
   { type: "h2", text: "3.2. Teléfono y red" },
-  { type: "bullet", text: "SIGVED se usa desde la aplicación instalada en el teléfono. El único código que se escanea es el de la causa, dentro de SIGVED, para enviar la evidencia." },
+  { type: "bullet", text: "SIGEVED se usa desde la aplicación instalada en el teléfono. El único código que se escanea es el de la causa, dentro de SIGEVED, para enviar la evidencia." },
   { type: "bullet", text: "El teléfono y la computadora tienen que verse entre sí. Si el teléfono usa el punto de acceso de la PC, la red de la sesión es la que empieza con 192.168.137." },
-  { type: "bullet", text: "En Android, la captura por cable usa un cable de datos, no solo de carga, y hay que aceptar en el teléfono el aviso «Permitir la depuración por USB». En iPhone la evidencia se envía por Wi-Fi: el cable no instala SIGVED ni espeja la pantalla." },
+  { type: "bullet", text: "En Android, la captura por cable usa un cable de datos, no solo de carga, y hay que aceptar en el teléfono el aviso «Permitir la depuración por USB». En iPhone la evidencia se envía por Wi-Fi: el cable no instala SIGEVED ni espeja la pantalla." },
   { type: "h2", text: "3.3. Instalar la aplicación" },
-  { type: "p", text: "Antes de la diligencia, SIGVED tiene que estar instalada en el teléfono. El archivo es SIGVED-1.0.apk. Se puede instalar de dos maneras." },
+  { type: "p", text: "Antes de la diligencia, SIGEVED tiene que estar instalada en el teléfono. El archivo es SIGEVED-1.0.apk. Se puede instalar de dos maneras." },
   { type: "h2", text: "Por cable USB" },
   { type: "ol", items: [
     "Conectar el teléfono con un cable de datos, la pantalla desbloqueada y la depuración USB aceptada.",
-    "En la computadora, instalar el archivo con el comando de ADB: adb install -r seguido de la ruta de SIGVED-1.0.apk.",
+    "En la computadora, instalar el archivo con el comando de ADB: adb install -r seguido de la ruta de SIGEVED-1.0.apk.",
     "Si el teléfono muestra un aviso para permitir la instalación por USB, tocarlo. En Xiaomi o HyperOS hay que tener activa la opción Instalar vía USB.",
   ] },
   { type: "h2", text: "Desde el dispositivo" },
   { type: "ol", items: [
-    "Copiar SIGVED-1.0.apk al almacenamiento interno del teléfono. En el administrador de archivos aparece en la raíz o en la carpeta Download, no en el acceso directo Descargas del navegador.",
+    "Copiar SIGEVED-1.0.apk al almacenamiento interno del teléfono. En el administrador de archivos aparece en la raíz o en la carpeta Download, no en el acceso directo Descargas del navegador.",
     "Abrir ese archivo en el teléfono y tocar Instalar.",
     "Si el teléfono pregunta si el administrador de archivos puede instalar aplicaciones, permitirlo.",
   ] },
-  { type: "p", text: "Después de instalarla, SIGVED se abre como cualquier otra aplicación. No hace falta otro programa para iniciarla." },
+  { type: "p", text: "Después de instalarla, SIGEVED se abre como cualquier otra aplicación. No hace falta otro programa para iniciarla." },
   { type: "h2", text: "iPhone" },
-  { type: "p", text: "En un iPhone, SIGVED no se instala copiando un archivo al almacenamiento. Apple exige una compilación firmada con una cuenta de desarrollador y que ese iPhone esté registrado antes de generar el instalable. La evidencia se envía por la red local." },
-  { type: "p", text: "La primera vez que el iPhone se conecta a la estación, iOS pide permiso de Red local. Hay que aceptarlo. Si se rechazó, se activa en Ajustes, SIGVED, Red local. El iPhone y la computadora tienen que estar en el mismo Wi-Fi." },
+  { type: "p", text: "En un iPhone, SIGEVED no se instala copiando un archivo al almacenamiento. Apple exige una compilación firmada con una cuenta de desarrollador y que ese iPhone esté registrado antes de generar el instalable. La evidencia se envía por la red local." },
+  { type: "p", text: "La primera vez que el iPhone se conecta a la estación, iOS pide permiso de Red local. Hay que aceptarlo. Si se rechazó, se activa en Ajustes, SIGEVED, Red local. El iPhone y la computadora tienen que estar en el mismo Wi-Fi." },
   { type: "h1", text: "4. Identificación de quien carga la prueba" },
   { type: "ol", items: [
-    "Abrir la estación. SIGVED toma el usuario de Windows y el DNI desde Active Directory. No se tipea el DNI.",
+    "Abrir la estación. SIGEVED toma el usuario de Windows y el DNI desde Active Directory. No se tipea el DNI.",
     "SIGI devuelve el nombre y las dependencias habilitadas para esa persona.",
     "Si hay más de una dependencia, el selector muestra solo las habilitadas. Elegir aquella donde se va a cargar la evidencia. La lista de causas queda limitada a esa dependencia.",
   ] },
@@ -86,7 +86,7 @@ const blocks = [
   ] },
   { type: "h2", text: "6.2. En el teléfono" },
   { type: "ol", items: [
-    "Abrir la aplicación SIGVED ya instalada en el teléfono.",
+    "Abrir la aplicación SIGEVED ya instalada en el teléfono.",
     "Incorporar la evidencia con Tomar foto, Grabar video, Elegir de la galería o Adjuntar documento. Se puede repetir las veces que haga falta.",
     "Abrir cada archivo de la lista para asignar una categoría y, si corresponde, una nota. Las categorías son: lesiones o estado físico, lugar de los hechos, amenaza o mensaje, documento, audio u otro.",
     "Tocar Conectar con la estación.",
@@ -138,7 +138,7 @@ const blocks = [
   { type: "p", text: "No hay un motor de base de datos aparte. La estación guarda las causas, las sesiones y las huellas en archivos locales de la carpeta de datos de la estación, y los archivos de evidencia en carpetas de esa misma computadora. Quien se lleva la PC se lleva la evidencia. El informe y el zip exportados son la forma de entregar la diligencia." },
   { type: "h1", text: "11. Problemas frecuentes" },
   { type: "h2", text: "El teléfono no conecta con la estación" },
-  { type: "p", text: "Revisar que SIGVED esté instalada, que el teléfono y la computadora estén en la misma red y que, al abrir la sesión, se haya elegido esa red. El código que se escanea es el de la causa, dentro de la app. La sesión no tiene que estar vencida ni cerrada. El firewall de Windows puede pedir permiso a Node la primera vez." },
+  { type: "p", text: "Revisar que SIGEVED esté instalada, que el teléfono y la computadora estén en la misma red y que, al abrir la sesión, se haya elegido esa red. El código que se escanea es el de la causa, dentro de la app. La sesión no tiene que estar vencida ni cerrada. El firewall de Windows puede pedir permiso a Node la primera vez." },
   { type: "h2", text: "No deja crear la causa" },
   { type: "p", text: "La dependencia del expediente no está entre las que SIGI habilitó para la persona que inició Windows. Hay que elegir la dependencia correcta o usar una cuenta habilitada para esa oficina." },
   { type: "h2", text: "Windows no reconoce el USB" },
@@ -166,8 +166,8 @@ function docxParagraphs() {
     if (block.type === "cover") {
       children.push(
         new Paragraph({ spacing: { before: 0, after: 200 }, children: [new TextRun({ text: "PODER JUDICIAL DEL CHACO", bold: true, color: "1A4F8A", size: 24, font: "Calibri" })] }),
-        new Paragraph({ spacing: { before: 200, after: 80 }, children: [new TextRun({ text: "SIGVED", bold: true, color: "12263A", size: 56, font: "Calibri", characterSpacing: 200 })] }),
-        new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: "Sistema Integrado de Gestión Voluntario de Evidencia Digital", color: "66788A", size: 24, font: "Calibri" })] }),
+        new Paragraph({ spacing: { before: 200, after: 80 }, children: [new TextRun({ text: "S.I.G.E.V.E.D.", bold: true, color: "12263A", size: 56, font: "Calibri", characterSpacing: 120 })] }),
+        new Paragraph({ spacing: { after: 200 }, children: [new TextRun({ text: "Sistema Integral de Gestión y Extracción Voluntaria de Evidencia Digital", color: "66788A", size: 24, font: "Calibri" })] }),
         new Paragraph({ spacing: { before: 300, after: 80 }, children: [new TextRun({ text: "Manual de uso y procedimiento de extracción de evidencia", bold: true, color: "12263A", size: 32, font: "Calibri" })] }),
         new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: "Estación de la computadora y aplicación del teléfono", italics: true, color: "66788A", size: 22, font: "Calibri" })] }),
         new Paragraph({ spacing: { before: 400, after: 80 }, children: [new TextRun({ text: fecha, color: "12263A", size: 20, font: "Calibri" })] }),
@@ -220,7 +220,7 @@ function writeDocx() {
       properties: { page: { margin: { top: 1000, bottom: 900, left: 1000, right: 1000 } } },
       headers: {
         default: new Header({
-          children: [new Paragraph({ children: [new TextRun({ text: "SIGVED  ·  Poder Judicial del Chaco", color: "1A4F8A", bold: true, font: "Calibri", size: 18 })] })],
+          children: [new Paragraph({ children: [new TextRun({ text: "S.I.G.E.V.E.D.  ·  Poder Judicial del Chaco", color: "1A4F8A", bold: true, font: "Calibri", size: 18 })] })],
         }),
       },
       footers: {
@@ -240,13 +240,13 @@ function writeDocx() {
     }],
   });
   return Packer.toBuffer(doc).then((buffer) => {
-    writeFileSync(path.join(outDir, "Manual-de-uso-SIGVED.docx"), buffer);
+    writeFileSync(path.join(outDir, "Manual-de-uso-SIGEVED.docx"), buffer);
   });
 }
 
 function writePdf() {
-  const file = path.join(outDir, "Manual-de-uso-SIGVED.pdf");
-  const doc = new PDFDocument({ size: "A4", margins: { top: 64, bottom: 0, left: 52, right: 52 }, bufferPages: true, info: { Title: "SIGVED — Manual de uso", Author: "Poder Judicial del Chaco" } });
+  const file = path.join(outDir, "Manual-de-uso-SIGEVED.pdf");
+  const doc = new PDFDocument({ size: "A4", margins: { top: 64, bottom: 0, left: 52, right: 52 }, bufferPages: true, info: { Title: "S.I.G.E.V.E.D. — Manual de uso", Author: "Poder Judicial del Chaco" } });
   const chunks = [];
   doc.on("data", (chunk) => chunks.push(chunk));
   const done = new Promise((resolve) => doc.on("end", resolve));
@@ -259,9 +259,9 @@ function writePdf() {
     doc.save();
     doc.rect(0, 0, doc.page.width, height).fillColor("#1a4f8a").fill();
     doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(continued ? 11 : 22);
-    doc.text("SIGVED", left, continued ? 12 : 28, { lineBreak: false });
+    doc.text("S.I.G.E.V.E.D.", left, continued ? 12 : 28, { lineBreak: false });
     if (!continued) {
-      doc.font("Helvetica").fontSize(10).text("Sistema Integrado de Gestión Voluntario de Evidencia Digital", left, 58, { lineBreak: false });
+      doc.font("Helvetica").fontSize(10).text("Sistema Integral de Gestión y Extracción Voluntaria de Evidencia Digital", left, 58, { lineBreak: false });
       doc.fontSize(12).text("Poder Judicial del Chaco", left, 76, { lineBreak: false });
     }
     doc.restore();
@@ -340,7 +340,7 @@ function writePdf() {
     doc.moveTo(left, foot).lineTo(doc.page.width - 52, foot).strokeColor("#d9e3ee").lineWidth(0.6).stroke();
     doc.restore();
     doc.fillColor("#66788a").font("Helvetica").fontSize(8).text(
-      `SIGVED · Poder Judicial del Chaco · Página ${index + 1} de ${range.count}`,
+      `S.I.G.E.V.E.D. · Poder Judicial del Chaco · Página ${index + 1} de ${range.count}`,
       left,
       foot + 8,
       { width, align: "center", lineBreak: false },
@@ -353,5 +353,5 @@ function writePdf() {
 mkdirSync(outDir, { recursive: true });
 await writeDocx();
 await writePdf();
-console.log(path.join(outDir, "Manual-de-uso-SIGVED.docx"));
-console.log(path.join(outDir, "Manual-de-uso-SIGVED.pdf"));
+console.log(path.join(outDir, "Manual-de-uso-SIGEVED.docx"));
+console.log(path.join(outDir, "Manual-de-uso-SIGEVED.pdf"));

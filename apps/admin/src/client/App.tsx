@@ -19,7 +19,7 @@ export function App() {
   if (error) {
     return (
       <main className="main">
-        <h1>SIGVED</h1>
+        <h1>S.I.G.E.V.E.D.</h1>
         <p className="error">{error}</p>
       </main>
     );
@@ -39,8 +39,8 @@ export function App() {
         <Link to="/" className="brand">
           <Logo />
           <div>
-            <strong>SIGVED</strong>
-            <span>Sistema Integrado de Gestión Voluntario de Evidencia Digital</span>
+            <strong>S.I.G.E.V.E.D.</strong>
+            <span>Sistema Integral de Gestión y Extracción Voluntaria de Evidencia Digital</span>
             <span>Poder Judicial del Chaco</span>
           </div>
         </Link>

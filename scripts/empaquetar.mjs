@@ -6,7 +6,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const release = path.join(root, "release");
-const paquete = path.join(release, "SIGVED");
+const paquete = path.join(release, "SIGEVED");
 const appDir = path.join(paquete, "app");
 const csc = path.join(process.env.WINDIR ?? "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
 
@@ -104,16 +104,16 @@ if (existsSync(sigiLocal)) cpSync(sigiLocal, path.join(paquete, "datos", "sigi.j
 writeFileSync(
   path.join(paquete, "LEEME.txt"),
   [
-    "SIGVED",
-    "Sistema Integrado de Gestión Voluntario de Evidencia Digital",
+    "SIGEVED",
+    "Sistema Integral de Gestión y Extracción Voluntaria de Evidencia Digital (S.I.G.E.V.E.D.)",
     "Poder Judicial del Chaco",
     "",
     "Instalar en esta PC:",
-    "  Ejecutá Instalar-SIGVED.exe, o, si descomprimiste la carpeta, Instalar.bat.",
-    "  Queda en %LOCALAPPDATA%\\SIGVED y crea un acceso directo.",
+    "  Ejecutá Instalar-SIGEVED.exe, o, si descomprimiste la carpeta, Instalar.bat.",
+    "  Queda en %LOCALAPPDATA%\\SIGEVED y crea un acceso directo.",
     "",
     "Probar sin instalar:",
-    "  Ejecutá SIGVED.exe dentro de esta carpeta.",
+    "  Ejecutá SIGEVED.exe dentro de esta carpeta.",
     "",
     "SIGI y Active Directory:",
     "  Si el paquete trae datos\\sigi.json, la estación ya puede consultar SIGI.",
@@ -124,7 +124,7 @@ writeFileSync(
     "La primera vez Windows puede pedir permiso de firewall para node.exe.",
     "Aceptalo en redes privadas para que el teléfono pueda conectarse.",
     "",
-    "Cerrar la ventana de SIGVED detiene la estación.",
+    "Cerrar la ventana de SIGEVED detiene la estación.",
     "El registro queda en datos\\estacion.log.",
     "",
   ].join("\r\n"),
@@ -136,8 +136,8 @@ writeFileSync(
   "@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0instalar.ps1\"\r\n",
 );
 
-if (!existsSync(csc)) throw new Error("No encuentro el compilador de .NET Framework para armar SIGVED.exe.");
-const icono = path.join(paquete, "SIGVED.ico");
+if (!existsSync(csc)) throw new Error("No encuentro el compilador de .NET Framework para armar SIGEVED.exe.");
+const icono = path.join(paquete, "SIGEVED.ico");
 console.log("Preparando el ícono...");
 run("powershell.exe", [
   "-NoProfile",
@@ -150,7 +150,7 @@ run("powershell.exe", [
   "-Destino",
   icono,
 ]);
-console.log("Compilando SIGVED.exe...");
+console.log("Compilando SIGEVED.exe...");
 run(csc, [
   "/nologo",
   "/target:winexe",
@@ -158,7 +158,7 @@ run(csc, [
   "/win32icon:" + icono,
   "/r:System.Windows.Forms.dll",
   "/r:System.Drawing.dll",
-  `/out:${path.join(paquete, "SIGVED.exe")}`,
+  `/out:${path.join(paquete, "SIGEVED.exe")}`,
   path.join(root, "scripts", "evidia-launcher.cs"),
 ]);
 
@@ -192,16 +192,16 @@ try {
   child.kill();
 }
 
-const zip = path.join(release, "SIGVED.zip");
+const zip = path.join(release, "SIGEVED.zip");
 if (existsSync(zip)) rmSync(zip);
 console.log("Comprimiendo...");
-run("tar", ["-a", "-c", "-f", zip, "-C", release, "SIGVED"]);
+run("tar", ["-a", "-c", "-f", zip, "-C", release, "SIGEVED"]);
 
-const instalador = path.join(release, "Instalar-SIGVED.exe");
+const instalador = path.join(release, "Instalar-SIGEVED.exe");
 const payload = path.join(release, "payload-instalador");
 rmSync(payload, { recursive: true, force: true });
 mkdirSync(payload, { recursive: true });
-cpSync(zip, path.join(payload, "SIGVED.zip"));
+cpSync(zip, path.join(payload, "SIGEVED.zip"));
 cpSync(path.join(root, "scripts", "instalar.ps1"), path.join(payload, "instalar.ps1"));
 writeFileSync(
   path.join(payload, "instalar.cmd"),
@@ -244,14 +244,14 @@ writeFileSync(
     "[Strings]",
     "InstallPrompt=",
     "DisplayLicense=",
-    "FinishMessage=SIGVED quedó instalado. Se abrió la estación.",
+    "FinishMessage=SIGEVED quedó instalado. Se abrió la estación.",
     `TargetName=${q(instalador)}`,
-    "FriendlyName=SIGVED",
+    "FriendlyName=SIGEVED",
     "AppLaunched=instalar.cmd",
     "PostInstallCmd=<None>",
     "AdminQuietInstCmd=",
     "UserQuietInstCmd=",
-    'FILE0="SIGVED.zip"',
+    'FILE0="SIGEVED.zip"',
     'FILE1="instalar.ps1"',
     'FILE2="instalar.cmd"',
     "",

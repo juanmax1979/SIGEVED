@@ -1,24 +1,24 @@
 $ErrorActionPreference = "Stop"
 
-$dest = Join-Path $env:LOCALAPPDATA "SIGVED"
+$dest = Join-Path $env:LOCALAPPDATA "SIGEVED"
 $here = $PSScriptRoot
 
-if (Test-Path (Join-Path $here "SIGVED.exe")) {
+if (Test-Path (Join-Path $here "SIGEVED.exe")) {
   $source = $here
 } else {
-  $zip = Join-Path $here "SIGVED.zip"
+  $zip = Join-Path $here "SIGEVED.zip"
   if (-not (Test-Path $zip)) {
-    throw "No encuentro SIGVED.exe ni SIGVED.zip junto a este instalador."
+    throw "No encuentro SIGEVED.exe ni SIGEVED.zip junto a este instalador."
   }
   $stage = Join-Path $env:TEMP "evidia-setup"
   if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
   New-Item -ItemType Directory -Path $stage | Out-Null
   tar -xf $zip -C $stage
-  $source = Join-Path $stage "SIGVED"
+  $source = Join-Path $stage "SIGEVED"
 }
 
-if (-not (Test-Path (Join-Path $source "SIGVED.exe"))) {
-  throw "El paquete no trae SIGVED.exe."
+if (-not (Test-Path (Join-Path $source "SIGEVED.exe"))) {
+  throw "El paquete no trae SIGEVED.exe."
 }
 
 $mismoLugar = [string]::Equals(
@@ -32,6 +32,20 @@ if (-not $mismoLugar) {
   & robocopy $source $dest /E /XD datos /NFL /NDL /NJH /NJS /NC /NS | Out-Null
   if ($LASTEXITCODE -ge 8) { throw "No se pudo copiar la estación." }
   $datos = Join-Path $dest "datos"
+  if (-not (Test-Path $datos)) {
+    foreach ($anterior in @("SIGVED", "EVIDIA")) {
+      $carpetaAnterior = Join-Path $env:LOCALAPPDATA $anterior
+      $datosAnteriores = Join-Path $carpetaAnterior "datos"
+      if (Test-Path (Join-Path $datosAnteriores "db.json")) {
+        Get-Process -ErrorAction SilentlyContinue |
+          Where-Object { try { $_.Path -like "$carpetaAnterior\*" } catch { $false } } |
+          Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        Move-Item $datosAnteriores $datos
+        break
+      }
+    }
+  }
   New-Item -ItemType Directory -Path $datos -Force | Out-Null
   foreach ($nombre in @("sigi.ejemplo.json", "sigi.json")) {
     $origen = Join-Path $source "datos\$nombre"
@@ -47,12 +61,15 @@ foreach ($carpeta in @(
   [Environment]::GetFolderPath("Desktop"),
   (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs")
 )) {
-  $acceso = $shell.CreateShortcut((Join-Path $carpeta "SIGVED.lnk"))
-  $acceso.TargetPath = Join-Path $dest "SIGVED.exe"
+  foreach ($viejo in @("SIGVED.lnk", "EVIDIA.lnk")) {
+    Remove-Item (Join-Path $carpeta $viejo) -ErrorAction SilentlyContinue
+  }
+  $acceso = $shell.CreateShortcut((Join-Path $carpeta "SIGEVED.lnk"))
+  $acceso.TargetPath = Join-Path $dest "SIGEVED.exe"
   $acceso.WorkingDirectory = $dest
-  $acceso.Description = "Estación SIGVED"
-  $acceso.IconLocation = "$(Join-Path $dest 'SIGVED.ico'),0"
+  $acceso.Description = "Estación SIGEVED"
+  $acceso.IconLocation = "$(Join-Path $dest 'SIGEVED.ico'),0"
   $acceso.Save()
 }
 
-Start-Process (Join-Path $dest "SIGVED.exe")
+Start-Process (Join-Path $dest "SIGEVED.exe")
