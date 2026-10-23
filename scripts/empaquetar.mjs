@@ -66,6 +66,7 @@ await esbuild.build({
 });
 
 cpSync(path.join(root, "apps", "admin", "src", "server", "sigi.ps1"), path.join(appDir, "sigi.ps1"));
+cpSync(path.join(root, "docs", "Manual-de-uso-SIGEVED.pdf"), path.join(appDir, "Manual-de-uso-SIGEVED.pdf"));
 cpSync(path.join(root, "apps", "admin", "dist"), path.join(appDir, "dist"), { recursive: true });
 cpSync(path.join(root, "apps", "admin", "tessdata"), path.join(appDir, "tessdata"), { recursive: true });
 const tools = path.join(root, "apps", "admin", "tools");
@@ -110,7 +111,9 @@ writeFileSync(
     "",
     "Instalar en esta PC:",
     "  Ejecutá Instalar-SIGEVED.exe, o, si descomprimiste la carpeta, Instalar.bat.",
-    "  Queda en %LOCALAPPDATA%\\SIGEVED y crea un acceso directo.",
+    "  Pide permiso de administrador y queda para todos los usuarios de Windows.",
+    "  El programa se instala en Archivos de programa\\SIGEVED.",
+    "  Las causas quedan en ProgramData\\SIGEVED, compartidas por todas las cuentas.",
     "",
     "Probar sin instalar:",
     "  Ejecutá SIGEVED.exe dentro de esta carpeta.",
@@ -125,7 +128,7 @@ writeFileSync(
     "Aceptalo en redes privadas para que el teléfono pueda conectarse.",
     "",
     "Cerrar la ventana de SIGEVED detiene la estación.",
-    "El registro queda en datos\\estacion.log.",
+    "El registro queda en ProgramData\\SIGEVED\\estacion.log cuando está instalado.",
     "",
   ].join("\r\n"),
 );

@@ -34,6 +34,13 @@ export type Aportante = {
   dniFoto: boolean;
 };
 
+export type DispositivoDetectado = {
+  marca: string;
+  modelo: string;
+  serie: string;
+  imei: string;
+};
+
 export function aportanteVacio(): Aportante {
   return { nombre: "", dni: "", caracter: "", caracterDetalle: "", dniFoto: false };
 }
@@ -90,9 +97,66 @@ export type CaseRecord = {
   responsable: string;
   notas: string;
   aportante: Aportante;
+  dispositivos?: DispositivoDetectado[];
   createdAt: string;
   updatedAt: string;
 };
+
+export function dispositivoVacio(): DispositivoDetectado {
+  return { marca: "", modelo: "", serie: "", imei: "" };
+}
+
+export function normalizarDispositivo(value: Partial<DispositivoDetectado> | null | undefined): DispositivoDetectado {
+  const imei = String(value?.imei ?? "").replace(/\D/g, "");
+  return {
+    marca: String(value?.marca ?? "").trim().slice(0, 80),
+    modelo: String(value?.modelo ?? "").trim().slice(0, 80),
+    serie: String(value?.serie ?? "").trim().slice(0, 80),
+    imei: /^\d{14,16}$/.test(imei) ? imei : "",
+  };
+}
+
+export function dispositivoUtil(item: DispositivoDetectado): boolean {
+  return Boolean(item.marca || item.modelo || item.serie || item.imei);
+}
+
+export function mismoDispositivo(actual: DispositivoDetectado, nuevo: DispositivoDetectado): boolean {
+  if (actual.imei && nuevo.imei) return actual.imei === nuevo.imei;
+  if (actual.serie && nuevo.serie) return actual.serie === nuevo.serie;
+  const modeloActual = actual.modelo.trim().toLowerCase();
+  const modeloNuevo = nuevo.modelo.trim().toLowerCase();
+  if (!modeloActual || !modeloNuevo) return false;
+  const mismoModelo = modeloActual === modeloNuevo || modeloActual.includes(modeloNuevo) || modeloNuevo.includes(modeloActual);
+  if (!mismoModelo) return false;
+  const marcaActual = actual.marca.trim().toLowerCase();
+  const marcaNueva = nuevo.marca.trim().toLowerCase();
+  return !marcaActual || !marcaNueva || marcaActual === marcaNueva;
+}
+
+export function completarDispositivo(base: DispositivoDetectado, extra: DispositivoDetectado): DispositivoDetectado {
+  const prefer = (left: string, right: string) => left.trim() || right.trim();
+  return normalizarDispositivo({
+    marca: prefer(base.marca, extra.marca),
+    modelo: prefer(base.modelo, extra.modelo),
+    serie: prefer(base.serie, extra.serie),
+    imei: prefer(base.imei, extra.imei),
+  });
+}
+
+export function incorporarDispositivo(lista: DispositivoDetectado[], nuevo: DispositivoDetectado): DispositivoDetectado[] {
+  const limpio = normalizarDispositivo(nuevo);
+  if (!dispositivoUtil(limpio)) return lista;
+  const index = lista.findIndex((item) => mismoDispositivo(item, limpio));
+  if (index < 0) return [...lista, limpio];
+  const copia = lista.slice();
+  copia[index] = completarDispositivo(lista[index] ?? dispositivoVacio(), limpio);
+  return copia;
+}
+
+export function textoDispositivo(item: DispositivoDetectado): string {
+  const valor = (texto: string) => texto.trim() || "no disponible";
+  return `marca ${valor(item.marca)}, modelo ${valor(item.modelo)}, serie ${valor(item.serie)}, IMEI ${valor(item.imei)}`;
+}
 
 export type SessionStatus = "waiting" | "connected" | "closed";
 

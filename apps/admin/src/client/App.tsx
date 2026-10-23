@@ -44,11 +44,16 @@ export function App() {
             <span>Poder Judicial del Chaco</span>
           </div>
         </Link>
-        <div className="topbar-meta">
-          Equipo {station.hostname}
-          <br />
-          Puerto {station.port}
-          {station.hosts[0] ? ` · Red ${station.hosts[0].address}` : ""}
+        <div className="topbar-side">
+          <a className="btn-ghost" href="/api/manual">
+            Ayuda
+          </a>
+          <div className="topbar-meta">
+            Equipo {station.hostname}
+            <br />
+            Puerto {station.port}
+            {station.hosts[0] ? ` · Red ${station.hosts[0].address}` : ""}
+          </div>
         </div>
       </header>
       <main className="main">

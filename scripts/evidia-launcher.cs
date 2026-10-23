@@ -25,7 +25,7 @@ namespace Evidia
             string raiz = AppDomain.CurrentDomain.BaseDirectory;
             string node = Path.Combine(raiz, "runtime", "node.exe");
             string servidor = Path.Combine(raiz, "app", "server.mjs");
-            string datos = Path.Combine(raiz, "datos");
+            string datos = CarpetaDatos(raiz);
             Directory.CreateDirectory(datos);
 
             if (!File.Exists(node) || !File.Exists(servidor))
@@ -53,7 +53,7 @@ namespace Evidia
             if (!PuertoAbierto())
             {
                 MessageBox.Show(
-                    "La estación no arrancó. El detalle quedó en datos\\estacion.log",
+                    "La estación no arrancó. El detalle quedó en " + Path.Combine(datos, "estacion.log"),
                     "SIGEVED",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -86,6 +86,24 @@ namespace Evidia
             AbrirNavegador();
             Application.Run(new Ventana());
             Detener();
+        }
+
+        static string CarpetaDatos(string raiz)
+        {
+            if (EstaDentro(raiz, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles))
+                || EstaDentro(raiz, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)))
+            {
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "SIGEVED");
+            }
+            return Path.Combine(raiz, "datos");
+        }
+
+        static bool EstaDentro(string ruta, string baseDir)
+        {
+            if (string.IsNullOrEmpty(baseDir)) return false;
+            string full = Path.GetFullPath(ruta).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string root = Path.GetFullPath(baseDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return full.StartsWith(root, StringComparison.OrdinalIgnoreCase);
         }
 
         public static void AbrirNavegador()

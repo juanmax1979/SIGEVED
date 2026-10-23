@@ -13,7 +13,18 @@ import {
   WidthType,
   type FileChild,
 } from "docx";
-import { formatoDni, labelCaracter, labelCategory, type CaseRecord, type EvidenceRecord, type PairingSession } from "@espejo/shared";
+import {
+  dispositivoUtil,
+  dispositivoVacio,
+  textoDispositivo,
+  formatoDni,
+  labelCaracter,
+  labelCategory,
+  type CaseRecord,
+  type DispositivoDetectado,
+  type EvidenceRecord,
+  type PairingSession,
+} from "@espejo/shared";
 import { rutaFotoDni } from "./dni-foto.js";
 
 const MARCO_ANCHO = 460;
@@ -38,6 +49,7 @@ export type ActaData = {
   cause: CaseRecord;
   evidence: EvidenceRecord[];
   sessions: PairingSession[];
+  dispositivos?: DispositivoDetectado[];
   generadoEn: string;
 };
 
@@ -56,15 +68,9 @@ export function fechaActa(iso: string): string {
   return `a los ${day} días del mes de ${MESES[month - 1] ?? ""} de ${year}`;
 }
 
-function aparato(data: ActaData): { nombre: string; identidad: string } {
-  const nombres = [...data.sessions.map((item) => item.deviceName), ...data.evidence.map((item) => item.deviceName)].filter(
-    (item): item is string => Boolean(item),
-  );
-  const imeis = data.sessions.map((item) => item.imei).filter((item): item is string => Boolean(item));
-  const unicos = [...new Set(nombres)];
-  const nombre = unicos[0] || "móvil";
-  const identidad = [unicos.length > 1 ? unicos.join(", ") : nombre, imeis[0] ? `IMEI ${imeis[0]}` : ""].filter(Boolean).join(", ");
-  return { nombre, identidad: identidad || nombre };
+function dispositivosActa(data: ActaData): DispositivoDetectado[] {
+  const lista = (data.dispositivos ?? data.cause.dispositivos ?? []).filter(dispositivoUtil);
+  return lista.length > 0 ? lista : [dispositivoVacio()];
 }
 
 export function cuerpoActa(data: ActaData): string {
@@ -72,10 +78,10 @@ export function cuerpoActa(data: ActaData): string {
   const caracter = aportante?.caracter ? labelCaracter(aportante.caracter, aportante.caracterDetalle) : "sin carácter consignado";
   const quien = aportante?.nombre || "la persona aportante";
   const dni = aportante?.dni ? `, DNI ${formatoDni(aportante.dni)}` : "";
-  const { nombre, identidad } = aparato(data);
+  const identificado = dispositivosActa(data).map(textoDispositivo).join("; ");
   const expediente = data.cause.expediente || "s/n";
   const caratula = data.cause.caratula || "s/ carátula";
-  return `En la ciudad de Resistencia, capital de la provincia del Chaco, ${fechaActa(data.generadoEn)}, en los autos caratulados: "${caratula}", Expte. Nº ${expediente}, se hace presente ${quien}${dni}, en carácter de ${caracter}, quien entrega voluntariamente el dispositivo ${nombre}, identificado como ${identidad}. Se le hace saber que el mismo será manipulado solo a los efectos de extraer la evidencia digital que consta en el mismo, para facilitar su extracción se instalará una aplicación móvil la cual solo se utilizará a esos efectos, y que finalizado el acto se procederá a su desinstalación del mismo. Luego el dispositivo es devuelto a la persona aportante. No siendo para más, finaliza el acto, previa íntegra lectura efectuada a viva voz por el actuario, firma el compareciente al pie de conformidad, todo ante mí que doy fe.`;
+  return `En la ciudad de Resistencia, capital de la provincia del Chaco, ${fechaActa(data.generadoEn)}, en los autos caratulados: "${caratula}", Expte. Nº ${expediente}, se hace presente ${quien}${dni}, en carácter de ${caracter}, quien entrega voluntariamente el dispositivo ${identificado}. Se le hace saber que el mismo será manipulado solo a los efectos de extraer la evidencia digital que consta en el mismo, para facilitar su extracción se instalará una aplicación móvil la cual solo se utilizará a esos efectos, y que finalizado el acto se procederá a su desinstalación del mismo. Luego el dispositivo es devuelto a la persona aportante. No siendo para más, finaliza el acto, previa íntegra lectura efectuada a viva voz por el actuario, firma el compareciente al pie de conformidad, todo ante mí que doy fe.`;
 }
 
 export function textoActa(data: ActaData): string {

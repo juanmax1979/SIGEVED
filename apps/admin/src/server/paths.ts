@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +14,13 @@ export const dataDir = path.resolve(process.env.ESPEJO_DATA_DIR ?? path.join(adm
 export const filesDir = path.join(dataDir, "files");
 export const dbPath = path.join(dataDir, "db.json");
 export const clientDist = path.join(adminRoot, "dist");
+const manualNombre = "Manual-de-uso-SIGEVED.pdf";
+
+export function rutaManual(): string {
+  const empaquetado = path.join(adminRoot, manualNombre);
+  const enRepositorio = path.resolve(adminRoot, "../../docs", manualNombre);
+  return existsSync(empaquetado) ? empaquetado : enRepositorio;
+}
 
 export function ensureDataDirs(): void {
   mkdirSync(filesDir, { recursive: true });

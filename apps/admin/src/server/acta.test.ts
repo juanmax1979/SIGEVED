@@ -42,6 +42,14 @@ const data = {
       imei: "356938035643809",
     },
   ],
+  dispositivos: [
+    {
+      marca: "Google",
+      modelo: "Pixel 8",
+      serie: "1A2B3C4D5E6F",
+      imei: "356938035643809",
+    },
+  ],
   generadoEn: "2026-10-19T16:00:00.000Z",
 };
 
@@ -51,12 +59,20 @@ test("el acta sigue el modelo de extracción y deja constancia de la app", () =>
   assert.match(texto, /En la ciudad de Resistencia, capital de la provincia del Chaco, a los 19 días del mes de octubre de 2026/);
   assert.match(texto, /autos caratulados: "Gomez c\/ Escalante"/);
   assert.match(texto, /se hace presente PEREZ MARIA LAURA, DNI 30\.111\.222, en carácter de Declaración de imputado/);
-  assert.match(texto, /entrega voluntariamente el dispositivo Pixel 8, identificado como Pixel 8, IMEI 356938035643809/);
+  assert.match(texto, /entrega voluntariamente el dispositivo marca Google, modelo Pixel 8, serie 1A2B3C4D5E6F, IMEI 356938035643809/);
   assert.match(texto, /manipulado solo a los efectos de extraer la evidencia digital/);
   assert.match(texto, /se instalará una aplicación móvil la cual solo se utilizará a esos efectos/);
   assert.match(texto, /se procederá a su desinstalación del mismo/);
   assert.match(texto, /Luego el dispositivo es devuelto a la persona aportante/);
   assert.match(texto, /No siendo para más, finaliza el acto, previa íntegra lectura efectuada a viva voz por el actuario/);
+});
+
+test("el acta nombra marca, modelo, serie e IMEI y marca lo que no se pudo leer", () => {
+  const texto = textoActa({
+    ...data,
+    dispositivos: [{ marca: "Samsung", modelo: "", serie: "", imei: "" }],
+  });
+  assert.match(texto, /marca Samsung, modelo no disponible, serie no disponible, IMEI no disponible/);
 });
 
 test("la foto del DNI entra en un recuadro y no se agranda", () => {

@@ -14,10 +14,16 @@ import {
   errorAportante,
   labelCategory,
   mismaDependencia,
-  nombreCarpetaExpediente,
+  dispositivoUtil,
+  incorporarDispositivo,
   normalizarAportante,
+  normalizarDispositivo,
+  nombreCarpetaExpediente,
+  type CaseRecord,
   type CaseType,
+  type DispositivoDetectado,
   type EvidenceCategory,
+  type EvidenceRecord,
   type PairPayload,
   type PairingSession,
 } from "@espejo/shared";
@@ -32,7 +38,7 @@ import { abrirCamaraTelefono, captureScreen, copiarMedio, imeiDelDispositivoCone
 import { dniDesdeDirectorio } from "./directorio.js";
 import { datosExpediente, datosUsuario, dniConfigurado, mensajeSinSigi, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
 import { etiquetaDependencia } from "./sigi-map.js";
-import { clientDist, dataDir, ensureDataDirs } from "./paths.js";
+import { clientDist, dataDir, ensureDataDirs, rutaManual } from "./paths.js";
 import {
   caseBundle,
   closeSession,
@@ -50,6 +56,7 @@ import {
   markPullFailed,
   pendingPulls,
   readSnapshot,
+  registrarDispositivo,
   requestPulls,
   saveEvidence,
   saveStationCapture,
@@ -75,6 +82,89 @@ const caseType = z.enum(CASE_TYPES.map((item) => item.id) as [CaseType, ...CaseT
 const category = z.enum(
   EVIDENCE_CATEGORIES.map((item) => item.id) as [EvidenceCategory, ...EvidenceCategory[]],
 );
+const datosDispositivo = {
+  marca: z.string().max(80).default(""),
+  modelo: z.string().max(80).default(""),
+  serie: z.string().max(80).default(""),
+  imei: z.string().max(20).default(""),
+};
+
+function caseIdDe(value: string | string[]): string {
+  return Array.isArray(value) ? (value[0] ?? "") : value;
+}
+
+async function anotarDispositivo(
+  caseId: string,
+  input: { serial: string; marca: string; modelo: string; serie: string; imei: string },
+): Promise<void> {
+  let item = normalizarDispositivo(input);
+  if (!dispositivoUtil(item)) {
+    try {
+      const status = await usbStatus();
+      const device = status.devices.find((entry) => entry.serial === input.serial && entry.state === "device");
+      if (device) {
+        item = normalizarDispositivo({
+          marca: device.manufacturer,
+          modelo: device.model,
+          serie: device.hardwareSerial || device.serial,
+          imei: device.imei,
+        });
+      }
+    } catch {
+      return;
+    }
+  }
+  if (dispositivoUtil(item)) await registrarDispositivo(caseId, item);
+}
+
+async function resolverDispositivos(
+  cause: CaseRecord,
+  sessions: PairingSession[],
+  evidence: EvidenceRecord[],
+): Promise<DispositivoDetectado[]> {
+  let lista = [...(cause.dispositivos ?? [])];
+  try {
+    const status = await usbStatus();
+    for (const device of status.devices) {
+      if (device.state !== "device") continue;
+      lista = incorporarDispositivo(lista, {
+        marca: device.manufacturer,
+        modelo: device.model,
+        serie: device.hardwareSerial || device.serial,
+        imei: device.imei,
+      });
+    }
+  } catch {
+    // Si el cable no responde, el acta usa lo que ya quedó guardado en la causa.
+  }
+  if (lista.length === 0) {
+    for (const item of evidence) {
+      if (item.source !== "pantalla" && item.source !== "dispositivo") continue;
+      lista = incorporarDispositivo(lista, { marca: "", modelo: item.deviceName, serie: item.deviceId, imei: "" });
+    }
+  }
+  if (lista.length === 0) {
+    for (const session of sessions) {
+      lista = incorporarDispositivo(lista, {
+        marca: "",
+        modelo: session.deviceName ?? "",
+        serie: "",
+        imei: session.imei ?? "",
+      });
+    }
+  } else if (lista.length === 1 && !lista[0]?.imei) {
+    const imei = sessions.find((item) => item.imei)?.imei ?? "";
+    if (imei) {
+      lista = incorporarDispositivo(lista, {
+        marca: lista[0]?.marca ?? "",
+        modelo: lista[0]?.modelo ?? "",
+        serie: lista[0]?.serie ?? "",
+        imei,
+      });
+    }
+  }
+  return lista;
+}
 
 const caseInput = z.object({
   caratula: z.string().trim().min(3).max(240),
@@ -120,6 +210,15 @@ app.use((req, res, next) => {
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "espejo-estacion", version: PROTOCOL_VERSION });
+});
+
+app.get("/api/manual", (_req, res) => {
+  const archivo = rutaManual();
+  if (!existsSync(archivo)) {
+    res.status(404).json({ error: "No encontramos el manual de uso." });
+    return;
+  }
+  res.download(archivo, "Manual-de-uso-SIGEVED.pdf");
 });
 
 app.get("/api/bootstrap", (req, res) => {
@@ -610,6 +709,7 @@ app.post("/api/cases/:id/usb/capture", async (req, res) => {
         category: category.default("otro"),
         note: z.string().max(2000).default(""),
         deviceName: z.string().max(160).default(""),
+        ...datosDispositivo,
       })
       .parse(req.body);
     const png = await captureScreen(body.serial);
@@ -630,6 +730,7 @@ app.post("/api/cases/:id/usb/capture", async (req, res) => {
       res.status(404).json({ error: "No encontramos esa causa." });
       return;
     }
+    await anotarDispositivo(caseIdDe(req.params.id), body);
     res.json({ evidence: record });
   } catch (error) {
     if (existsSync(temp)) unlinkSync(temp);
@@ -647,6 +748,7 @@ app.post("/api/cases/:id/usb/record", async (req, res) => {
         category: category.default("otro"),
         note: z.string().max(2000).default(""),
         deviceName: z.string().max(160).default(""),
+        ...datosDispositivo,
       })
       .parse(req.body);
     await recordScreen(body.serial, body.seconds, temp);
@@ -666,6 +768,7 @@ app.post("/api/cases/:id/usb/record", async (req, res) => {
       res.status(404).json({ error: "No encontramos esa causa." });
       return;
     }
+    await anotarDispositivo(caseIdDe(req.params.id), body);
     res.json({ evidence: record });
   } catch (error) {
     if (existsSync(temp)) unlinkSync(temp);
@@ -684,6 +787,7 @@ app.post("/api/cases/:id/usb/import", async (req, res) => {
         category: category.default("otro"),
         note: z.string().max(2000).default(""),
         deviceName: z.string().max(160).default(""),
+        ...datosDispositivo,
       })
       .parse(req.body);
     if (!caseBundle(caseId).cause) {
@@ -725,6 +829,7 @@ app.post("/api/cases/:id/usb/import", async (req, res) => {
       res.status(400).json({ error: errors[0] || "No se pudo copiar ningún archivo." });
       return;
     }
+    await anotarDispositivo(caseId, body);
     res.json({ evidence, errors });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "No se pudieron copiar los archivos." });
@@ -1019,6 +1124,11 @@ async function fillArchive(
   cause: NonNullable<ReturnType<typeof caseBundle>["cause"]>,
   bundle: ReturnType<typeof caseBundle>,
 ): Promise<Buffer> {
+  const dispositivos = await resolverDispositivos(cause, bundle.sessions, bundle.evidence);
+  if (dispositivos.length > 0) {
+    for (const item of dispositivos) await registrarDispositivo(cause.id, item);
+    cause.dispositivos = dispositivos;
+  }
   const carpeta = nombreCarpetaExpediente(cause.expediente);
   const dentro = (name: string) => `${carpeta}/${name}`;
   const manifest = {
@@ -1063,6 +1173,7 @@ async function fillArchive(
     cause,
     evidence: bundle.evidence,
     sessions: bundle.sessions,
+    dispositivos: cause.dispositivos ?? [],
     generadoEn: manifest.exportadoEn,
   });
   archive.append(JSON.stringify(manifest, null, 2), { name: dentro("manifiesto.json") });

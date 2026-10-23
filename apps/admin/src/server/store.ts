@@ -3,9 +3,12 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, 
 import path from "node:path";
 import {
   aportanteVacio,
+  incorporarDispositivo,
   normalizarAportante,
+  normalizarDispositivo,
   type CaseRecord,
   type CatalogItem,
+  type DispositivoDetectado,
   type EvidenceRecord,
   type PairingSession,
   type PullRequest,
@@ -257,6 +260,19 @@ export function connectDevice(input: {
     session.connectedAt = session.connectedAt ?? new Date().toISOString();
     const cause = db.cases.find((item) => item.id === session.caseId);
     return { session, caratula: cause?.caratula ?? "Causa" };
+  });
+}
+
+export function registrarDispositivo(caseId: string, incoming: DispositivoDetectado): Promise<DispositivoDetectado[] | undefined> {
+  return mutate((db) => {
+    const cause = db.cases.find((item) => item.id === caseId);
+    if (!cause) return undefined;
+    const actual = cause.dispositivos ?? [];
+    const siguiente = incorporarDispositivo(actual, normalizarDispositivo(incoming));
+    if (siguiente === actual) return actual;
+    cause.dispositivos = siguiente;
+    cause.updatedAt = new Date().toISOString();
+    return siguiente;
   });
 }
 

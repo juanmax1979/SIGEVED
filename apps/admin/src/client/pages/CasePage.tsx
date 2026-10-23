@@ -27,6 +27,7 @@ export function CasePage() {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editingAportante, setEditingAportante] = useState(false);
+  const [wifiAbierta, setWifiAbierta] = useState(false);
 
   function reload() {
     api<{ cause: CaseRecord; evidence: EvidenceRecord[]; sessions: PairingSession[] }>(`/api/cases/${id}`)
@@ -144,31 +145,56 @@ export function CasePage() {
         onSaved={setCause}
       />
       <section className="panel" style={{ marginBottom: 18 }}>
-        <h2>Conectar un teléfono</h2>
-        <p className="meta">
-          El teléfono y esta computadora tienen que estar en la misma red. La persona aportante confirma en la app qué archivos comparte.
-        </p>
-        <div className="row" style={{ marginTop: 14 }}>
-          <label style={{ minWidth: 260 }}>
-            Red de esta PC
-            <select value={host} onChange={(event) => setHost(event.target.value)}>
-              {hosts.length === 0 ? <option value="">Sin red local</option> : null}
-              {hosts.map((item) => (
-                <option key={item.address} value={item.address}>
-                  {item.name} · {item.address}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="btn" onClick={openSession} disabled={!host}>
-            Abrir sesión de descarga
+        <div className="section-head">
+          <h2>Conectar un teléfono</h2>
+          <button
+            className="fold-arrow"
+            type="button"
+            aria-expanded={wifiAbierta}
+            aria-controls="conexion-wifi"
+            aria-label={wifiAbierta ? "Ocultar conexión por red" : "Mostrar conexión por red"}
+            onClick={() => setWifiAbierta((abierta) => !abierta)}
+          >
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path
+                d="M6 3.5 11 8 6 12.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         </div>
-        {sessions.find((item) => item.status !== "closed") ? (
-          <p className="meta">
-            Hay una sesión abierta.{" "}
-            <Link to={`/causas/${id}/sesion/${sessions.find((item) => item.status !== "closed")!.id}`}>Continuar</Link>
-          </p>
+        {wifiAbierta ? (
+          <div id="conexion-wifi">
+            <p className="meta">
+              El teléfono y esta computadora tienen que estar en la misma red. La persona aportante confirma en la app qué archivos comparte.
+            </p>
+            <div className="row" style={{ marginTop: 14 }}>
+              <label style={{ minWidth: 260 }}>
+                Red de esta PC
+                <select value={host} onChange={(event) => setHost(event.target.value)}>
+                  {hosts.length === 0 ? <option value="">Sin red local</option> : null}
+                  {hosts.map((item) => (
+                    <option key={item.address} value={item.address}>
+                      {item.name} · {item.address}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="btn" onClick={openSession} disabled={!host}>
+                Abrir sesión de descarga
+              </button>
+            </div>
+            {sessions.find((item) => item.status !== "closed") ? (
+              <p className="meta">
+                Hay una sesión abierta.{" "}
+                <Link to={`/causas/${id}/sesion/${sessions.find((item) => item.status !== "closed")!.id}`}>Continuar</Link>
+              </p>
+            ) : null}
+          </div>
         ) : null}
       </section>
       <UsbPanel caseId={id} onSaved={reload} />

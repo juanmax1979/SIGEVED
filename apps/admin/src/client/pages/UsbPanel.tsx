@@ -73,6 +73,13 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
   const selected = status?.devices.find((item) => item.serial === serial);
   const ready = selected?.state === "device" && !busy;
   const deviceName = selected ? [selected.manufacturer, selected.model].filter(Boolean).join(" ") : "";
+  const datosDispositivo = {
+    deviceName,
+    marca: selected?.manufacturer.trim() ?? "",
+    modelo: selected?.model.trim() ?? "",
+    serie: (selected?.hardwareSerial || selected?.serial || "").trim(),
+    imei: selected?.imei.trim() ?? "",
+  };
 
   async function buscar(tipo: "imagen" | "video") {
     setBusy(tipo === "imagen" ? "Buscando imágenes" : "Buscando videos");
@@ -104,7 +111,7 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
     try {
       const data = await api<{ evidence: unknown[]; errors: string[] }>(`/api/cases/${caseId}/usb/import`, {
         method: "POST",
-        body: JSON.stringify({ serial, tipo: tipoMedio, paths: elegidos, category, note, deviceName }),
+        body: JSON.stringify({ serial, tipo: tipoMedio, paths: elegidos, category, note, ...datosDispositivo }),
       });
       const cantidad = data.evidence.length;
       setMessage(
@@ -186,12 +193,27 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
             </label>
           </div>
           {selected ? (
-            <p className="meta">
-              {deviceName || "Teléfono"}
-              {selected.android ? ` · Android ${selected.android}` : ""}
-              {selected.hardwareSerial ? ` · Serie ${selected.hardwareSerial}` : ""}
-              {selected.imei ? ` · IMEI ${selected.imei}` : " · IMEI no disponible por el cable"}
-            </p>
+            <div className="device-block">
+              <p className="meta">Datos del dispositivo conectado</p>
+              <dl className="device-data">
+                <div>
+                  <dt>Marca</dt>
+                  <dd>{selected.manufacturer.trim() || "No disponible"}</dd>
+                </div>
+                <div>
+                  <dt>Modelo</dt>
+                  <dd>{selected.model.trim() || "No disponible"}</dd>
+                </div>
+                <div>
+                  <dt>Serie</dt>
+                  <dd>{(selected.hardwareSerial || selected.serial).trim() || "No disponible"}</dd>
+                </div>
+                <div>
+                  <dt>IMEI</dt>
+                  <dd>{selected.imei.trim() || "No disponible"}</dd>
+                </div>
+              </dl>
+            </div>
           ) : null}
           {selected?.state === "unauthorized" ? (
             <p className="error">El teléfono está conectado. Falta aceptar «Permitir depuración USB» en su pantalla.</p>
@@ -213,14 +235,14 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
             <button
               className="btn"
               disabled={!ready}
-              onClick={() => run("Capturando", `/api/cases/${caseId}/usb/capture`, { serial, category, note, deviceName })}
+              onClick={() => run("Capturando", `/api/cases/${caseId}/usb/capture`, { serial, category, note, ...datosDispositivo })}
             >
               {busy === "Capturando" ? "Capturando…" : "Capturar lo que se ve"}
             </button>
             <button
               className="btn"
               disabled={!ready}
-              onClick={() => run("Grabando", `/api/cases/${caseId}/usb/record`, { serial, seconds, category, note, deviceName })}
+              onClick={() => run("Grabando", `/api/cases/${caseId}/usb/record`, { serial, seconds, category, note, ...datosDispositivo })}
             >
               {busy === "Grabando" ? `Grabando ${seconds} s…` : "Grabar pantalla"}
             </button>
