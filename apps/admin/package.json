@@ -8,7 +8,7 @@
     "build": "vite build",
     "start": "tsx src/server/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "tsx --test src/server/custody.test.ts src/server/sigi-map.test.ts src/server/directorio.test.ts src/server/adb.test.ts src/server/informe.test.ts src/server/dni-foto.test.ts src/server/acta.test.ts src/server/consentimiento.test.ts"
+    "test": "tsx --test src/server/custody.test.ts src/server/sigi-map.test.ts src/server/iure-map.test.ts src/server/directorio.test.ts src/server/adb.test.ts src/server/informe.test.ts src/server/dni-foto.test.ts src/server/acta.test.ts src/server/consentimiento.test.ts"
   },
   "dependencies": {
     "@espejo/shared": "*",

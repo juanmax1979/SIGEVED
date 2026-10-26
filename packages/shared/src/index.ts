@@ -62,6 +62,55 @@ export function nombreCarpetaExpediente(expediente: string): string {
   return limpio.slice(0, 80) || "expediente";
 }
 
+export function claveExpediente(expediente: string): string {
+  return expediente.trim().toUpperCase().replace(/\s+/g, "");
+}
+
+export function expedienteYaCargado(
+  causas: { id?: string; expediente?: string }[],
+  expediente: string,
+  exceptoId = "",
+): boolean {
+  const clave = claveExpediente(expediente);
+  if (!clave) return false;
+  return causas.some((item) => item.id !== exceptoId && claveExpediente(item.expediente ?? "") === clave);
+}
+
+export function identificadorProvisorioValido(value: string): boolean {
+  const texto = value.trim();
+  return (
+    texto.length >= 1 &&
+    texto.length <= 80 &&
+    /[\p{L}\p{N}]/u.test(texto) &&
+    /^[\p{L}\p{N}\s/\\._,;:'°º#()\-]+$/u.test(texto)
+  );
+}
+
+export function apellidoAportante(nombre: string): string {
+  const limpio = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const antesDeLaComa = limpio.split(",")[0] ?? "";
+  const palabra = antesDeLaComa.split(/\s+/).filter(Boolean)[0] ?? "";
+  return palabra.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 40);
+}
+
+export function nombreArchivoAportante(nombre: string): string {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+}
+
+export function nombrePaquete(cause: { expediente: string; identificador?: string; aportante?: { nombre?: string } | null }): string {
+  const expediente = cause.expediente.trim();
+  const match = expediente.match(/^(\d+)\s*[/\\]\s*(\d{4})/);
+  const base = match ? `${match[1]}-${match[2]}` : nombreCarpetaExpediente(cause.identificador || expediente);
+  const persona = nombreArchivoAportante(cause.aportante?.nombre ?? "");
+  return [base, persona, "EV"].filter(Boolean).join("-");
+}
+
 export function formatoDni(dni: string): string {
   const digits = dni.replace(/\D/g, "");
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
@@ -97,6 +146,8 @@ export type CaseRecord = {
   responsable: string;
   notas: string;
   aportante: Aportante;
+  provisorio?: boolean;
+  identificador?: string;
   dispositivos?: DispositivoDetectado[];
   createdAt: string;
   updatedAt: string;

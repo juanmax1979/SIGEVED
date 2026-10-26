@@ -60,7 +60,7 @@ function connectionString(config: SigiConfig): string {
   return `${base};Integrated Security=True`;
 }
 
-function runSql(payload: unknown): Promise<unknown> {
+export function consultarSql(payload: unknown, origen = "SIGI"): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       "powershell.exe",
@@ -71,7 +71,7 @@ function runSql(payload: unknown): Promise<unknown> {
     const err: Buffer[] = [];
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error("SIGI no respondió a tiempo."));
+      reject(new Error(`${origen} no respondió a tiempo.`));
     }, 20000);
     child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
@@ -83,14 +83,14 @@ function runSql(payload: unknown): Promise<unknown> {
       clearTimeout(timer);
       const stderr = Buffer.concat(err).toString("utf8").trim();
       if (code !== 0) {
-        reject(new Error(stderr || "No se pudo consultar SIGI."));
+        reject(new Error(stderr || `No se pudo consultar ${origen}.`));
         return;
       }
       const stdout = Buffer.concat(out).toString("utf8").trim();
       try {
         resolve(stdout ? JSON.parse(stdout) : []);
       } catch {
-        reject(new Error("SIGI devolvió una respuesta que no se pudo leer."));
+        reject(new Error(`${origen} devolvió una respuesta que no se pudo leer.`));
       }
     });
     child.stdin.write(JSON.stringify(payload));
@@ -101,7 +101,7 @@ function runSql(payload: unknown): Promise<unknown> {
 async function describe(config: SigiConfig, procedure: string): Promise<{ schema: string; parameters: SigiParameter[] }> {
   const cached = described.get(procedure);
   if (cached) return cached;
-  const result = (await runSql({
+  const result = (await consultarSql({
     connectionString: connectionString(config),
     action: "describe",
     procedure,
@@ -138,7 +138,7 @@ async function execProc(procedure: string, value: string, hints: string[]): Prom
     const names = info.parameters.map((item) => item.name).join(", ");
     throw new Error(`No sé qué parámetro usar en ${procedure}. Tiene: ${names}.`);
   }
-  const rows = await runSql({
+  const rows = await consultarSql({
     connectionString: connectionString(config),
     action: "exec",
     procedure,

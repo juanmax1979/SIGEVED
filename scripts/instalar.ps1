@@ -74,7 +74,7 @@ if (-not (Test-Path (Join-Path $datos "db.json"))) {
     }
   }
 }
-foreach ($nombre in @("sigi.ejemplo.json", "sigi.json")) {
+foreach ($nombre in @("sigi.ejemplo.json", "sigi.json", "iure.ejemplo.json", "iure.json")) {
   $origen = Join-Path $source "datos\$nombre"
   $destinoArchivo = Join-Path $datos $nombre
   if ((Test-Path $origen) -and -not (Test-Path $destinoArchivo)) {

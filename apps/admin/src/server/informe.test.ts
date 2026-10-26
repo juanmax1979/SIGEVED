@@ -3,13 +3,36 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { errorAportante, nombreCarpetaExpediente } from "@espejo/shared";
+import { apellidoAportante, errorAportante, expedienteYaCargado, identificadorProvisorioValido, nombreArchivoAportante, nombreCarpetaExpediente, nombrePaquete } from "@espejo/shared";
 import { escribirInformePdf } from "./informe.js";
 
 test("nombra la carpeta del paquete con el número y el año del expediente", () => {
   assert.equal(nombreCarpetaExpediente("18326/2017-1"), "18326-2017");
   assert.equal(nombreCarpetaExpediente("1/2021-1"), "1-2021");
   assert.equal(nombreCarpetaExpediente(""), "expediente");
+});
+
+test("reconoce un expediente definitivo que ya está cargado", () => {
+  const causas = [{ id: "a", expediente: "18326/2017-1" }, { id: "b", expediente: "" }];
+  assert.equal(expedienteYaCargado(causas, "18326 / 2017-1"), true);
+  assert.equal(expedienteYaCargado(causas, "18326/2017-1", "a"), false);
+  assert.equal(expedienteYaCargado(causas, "999/2026-1"), false);
+});
+
+test("acepta una carátula provisoria con barra", () => {
+  assert.equal(identificadorProvisorioValido("PEDRO PASCAL S/ DENUNCIA"), true);
+  assert.equal(identificadorProvisorioValido("///"), false);
+});
+
+test("nombra el zip con expediente, año, nombre y apellido, y EV", () => {
+  assert.equal(nombreArchivoAportante("PEREZ MARIA LAURA"), "PEREZ-MARIA-LAURA");
+  assert.equal(nombreArchivoAportante("Pérez, María Laura"), "PEREZ-MARIA-LAURA");
+  assert.equal(apellidoAportante("PEREZ MARIA LAURA"), "PEREZ");
+  assert.equal(
+    nombrePaquete({ expediente: "18326/2017-1", aportante: { nombre: "PEREZ MARIA LAURA" } }),
+    "18326-2017-PEREZ-MARIA-LAURA-EV",
+  );
+  assert.equal(nombrePaquete({ expediente: "", identificador: "Causa A", aportante: { nombre: "" } }), "Causa-A-EV");
 });
 
 test("pide nombres, DNI y carácter del aportante", () => {

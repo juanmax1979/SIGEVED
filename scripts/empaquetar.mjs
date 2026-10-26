@@ -101,6 +101,12 @@ writeFileSync(
 );
 const sigiLocal = path.join(root, "apps", "admin", "data", "sigi.json");
 if (existsSync(sigiLocal)) cpSync(sigiLocal, path.join(paquete, "datos", "sigi.json"));
+writeFileSync(
+  path.join(paquete, "datos", "iure.ejemplo.json"),
+  `${JSON.stringify({ server: "SERVIDOR", port: 1433, database: "IURE", user: "USUARIO", password: "", encrypt: false }, null, 2)}\n`,
+);
+const iureLocal = path.join(root, "apps", "admin", "data", "iure.json");
+if (existsSync(iureLocal)) cpSync(iureLocal, path.join(paquete, "datos", "iure.json"));
 
 writeFileSync(
   path.join(paquete, "LEEME.txt"),
@@ -118,9 +124,11 @@ writeFileSync(
     "Probar sin instalar:",
     "  Ejecutá SIGEVED.exe dentro de esta carpeta.",
     "",
-    "SIGI y Active Directory:",
+    "SIGI, IURE y Active Directory:",
     "  Si el paquete trae datos\\sigi.json, la estación ya puede consultar SIGI.",
     "  Si no está, copiá datos\\sigi.ejemplo.json como datos\\sigi.json y completá server y database.",
+    "  Si el paquete trae datos\\iure.json, la estación también consulta IURE con el usuario de Windows.",
+    "  Si no está, copiá datos\\iure.ejemplo.json como datos\\iure.json y completá el servidor.",
     "  Si la PC está en el dominio y el archivo no trae usuario, usa la cuenta de Windows.",
     "  El DNI sale del atributo employeeID de la cuenta que inició sesión.",
     "",
@@ -262,6 +270,13 @@ writeFileSync(
 );
 
 console.log("Armando el instalador...");
+if (existsSync(instalador)) {
+  try {
+    rmSync(instalador);
+  } catch {
+    console.log("Cerrá Instalar-SIGEVED.exe: está abierto y no se puede reemplazar.");
+  }
+}
 const iexpress = spawnSync(path.join(process.env.WINDIR ?? "C:\\Windows", "System32", "iexpress.exe"), ["/N", "/Q", sed], {
   stdio: "inherit",
 });

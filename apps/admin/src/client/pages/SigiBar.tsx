@@ -8,11 +8,22 @@ export type SigiSession = {
   dni: string;
   origen: "" | "directorio";
   nombre: string;
-  dependencias: { id: string; nombre: string; circunscripcion: string; rol: string }[];
+  sistema: "" | "sigi" | "iure";
+  dependencias: { id: string; nombre: string; circunscripcion: string; rol: string; sistema?: "sigi" | "iure"; fueroId?: string }[];
   oficinaId: string;
   oficinaNombre: string;
   error: string;
 };
+
+function etiqueta(item: SigiSession["dependencias"][number]): string {
+  const partes = [item.nombre, item.rol, item.circunscripcion].filter(Boolean);
+  if (item.sistema === "iure") partes.push("IURE");
+  return partes.join(" · ");
+}
+
+function clave(item: { id: string; sistema?: "sigi" | "iure" }): string {
+  return `${item.sistema ?? "sigi"}:${item.id}`;
+}
 
 export function SigiBar({ onChange }: { onChange: (session: SigiSession) => void }) {
   const [session, setSession] = useState<SigiSession | null>(null);
@@ -33,18 +44,21 @@ export function SigiBar({ onChange }: { onChange: (session: SigiSession) => void
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function choose(id: string) {
-    if (!id) return;
+  async function choose(valor: string) {
+    const [marca = "sigi", id = ""] = valor.split(":");
+    if (!id || (marca !== "sigi" && marca !== "iure")) return;
+    const sistema: "sigi" | "iure" = marca;
     setError("");
     try {
-      await api("/api/sigi/oficina", { method: "POST", body: JSON.stringify({ id }) });
+      await api("/api/sigi/oficina", { method: "POST", body: JSON.stringify({ id, sistema }) });
       setSession((current) => {
         if (!current) return current;
-        const office = current.dependencias.find((item) => item.id === id);
+        const office = current.dependencias.find((item) => item.id === id && (item.sistema ?? "sigi") === sistema);
         const next = {
           ...current,
+          sistema,
           oficinaId: id,
-          oficinaNombre: office ? [office.nombre, office.rol, office.circunscripcion].filter(Boolean).join(" · ") : "",
+          oficinaNombre: office ? etiqueta(office) : "",
         };
         onChange(next);
         return next;
@@ -54,7 +68,7 @@ export function SigiBar({ onChange }: { onChange: (session: SigiSession) => void
     }
   }
 
-  if (!session && !error) return <p className="meta">Consultando la cuenta de Active Directory en SIGI…</p>;
+  if (!session && !error) return <p className="meta">Consultando la cuenta de Active Directory en SIGI e IURE…</p>;
 
   const identidad = session?.origen === "directorio"
     ? `Sesión de Active Directory ${session.username}. El DNI ${session.dni} se tomó de la cuenta.`
@@ -65,14 +79,14 @@ export function SigiBar({ onChange }: { onChange: (session: SigiSession) => void
   return (
     <section className="panel" style={{ marginBottom: 18 }}>
       <h2>{session?.nombre || "Usuario de SIGI"}</h2>
-      {session?.nombre ? <p className="meta">{identidad} La evidencia se carga en la dependencia que elijas.</p> : null}
+      {session?.nombre ? <p className="meta">{identidad} La evidencia se carga en la dependencia de SIGI o IURE que elijas.</p> : null}
       {session && session.dependencias.length > 1 ? (
         <label>
           Dependencia donde se carga la evidencia
-          <select value={session.oficinaId} onChange={(event) => void choose(event.target.value)}>
+          <select value={clave({ id: session.oficinaId, sistema: session.sistema || "sigi" })} onChange={(event) => void choose(event.target.value)}>
             {session.dependencias.map((item) => (
-              <option key={item.id} value={item.id}>
-                {[item.nombre, item.rol, item.circunscripcion].filter(Boolean).join(" · ")}
+              <option key={clave(item)} value={clave(item)}>
+                {etiqueta(item)}
               </option>
             ))}
           </select>

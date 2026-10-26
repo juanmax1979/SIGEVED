@@ -22,6 +22,8 @@ export type OperatorSession = {
   dni: string;
   oficinaId: string;
   oficinaNombre: string;
+  sistema?: "sigi" | "iure";
+  fueroId?: string;
 };
 
 export type Database = {
@@ -102,7 +104,9 @@ export function getAdminToken(): string {
 }
 
 export function getOperator(): OperatorSession | null {
-  return readDb().operator;
+  const operator = readDb().operator;
+  if (!operator) return null;
+  return { ...operator, sistema: operator.sistema === "iure" ? "iure" : "sigi", fueroId: operator.fueroId ?? "" };
 }
 
 export function setOperator(operator: OperatorSession): Promise<OperatorSession> {

@@ -4,7 +4,7 @@ import {
   errorAportante,
   formatBytes,
   labelCategory,
-  nombreCarpetaExpediente,
+  nombrePaquete,
   type CaseRecord,
   type EvidenceRecord,
   type PairingSession,
@@ -12,6 +12,84 @@ import {
 import { api } from "../api";
 import { AportantePanel } from "./AportantePanel";
 import { UsbPanel } from "./UsbPanel";
+
+function RegistroDefinitivoPanel({ cause, onSaved }: { cause: CaseRecord; onSaved: (cause: CaseRecord) => void }) {
+  const [numero, setNumero] = useState("");
+  const [preview, setPreview] = useState<{ expediente: string; caratula: string; dependencia: string; proceso: string } | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function consult() {
+    setLooking(true);
+    setError("");
+    setPreview(null);
+    try {
+      const data = await api<{
+        expediente: { expediente: string; caratula: string; dependencia: string; proceso: string };
+      }>(`/api/sigi/expediente?numero=${encodeURIComponent(numero.trim())}`);
+      setPreview(data.expediente);
+      if (data.expediente.expediente) setNumero(data.expediente.expediente);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo consultar el expediente.");
+    } finally {
+      setLooking(false);
+    }
+  }
+
+  async function guardar() {
+    if (!preview?.caratula) return;
+    setPending(true);
+    setError("");
+    try {
+      const data = await api<{ case: CaseRecord }>(`/api/cases/${cause.id}/definitivo`, {
+        method: "POST",
+        body: JSON.stringify({ expediente: (preview.expediente || numero).trim() }),
+      });
+      onSaved(data.case);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo guardar el registro definitivo.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="panel form" style={{ marginBottom: 18 }}>
+      <h2>Pasar a registro definitivo</h2>
+      <p className="meta">
+        Identificación provisoria: {cause.identificador || cause.caratula}. Consultá el número en SIGI y, si el expediente existe, la causa pasa a registro definitivo.
+      </p>
+      <label>
+        Número de expediente
+        <input
+          value={numero}
+          onChange={(event) => {
+            setNumero(event.target.value);
+            setPreview(null);
+          }}
+          placeholder="18326/2017"
+        />
+      </label>
+      {preview ? (
+        <p className="meta">
+          {preview.caratula}
+          {preview.dependencia ? ` · ${preview.dependencia}` : ""}
+          {preview.proceso ? ` · ${preview.proceso}` : ""}
+        </p>
+      ) : null}
+      {error ? <p className="error">{error}</p> : null}
+      <div className="row">
+        <button className="btn" type="button" onClick={() => void consult()} disabled={looking || !numero.trim()}>
+          {looking ? "Consultando SIGI…" : "Consultar expediente"}
+        </button>
+        <button className="btn" type="button" onClick={() => void guardar()} disabled={pending || !preview?.caratula}>
+          {pending ? "Guardando…" : "Guardar registro definitivo"}
+        </button>
+      </div>
+    </section>
+  );
+}
 
 export function CasePage() {
   const { id = "" } = useParams();
@@ -95,10 +173,10 @@ export function CasePage() {
     <>
       <div className="top">
         <div>
-          {cause.proceso ? <div className="kicker">{cause.proceso}</div> : null}
+          {cause.provisorio ? <div className="kicker">Registro provisorio</div> : cause.proceso ? <div className="kicker">{cause.proceso}</div> : null}
           <h1>{cause.caratula}</h1>
           <p className="lede">
-            {cause.expediente || "Sin número de expediente"}
+            {cause.provisorio ? `Registro provisorio · ${cause.identificador || cause.caratula}` : cause.expediente || "Sin número de expediente"}
             {cause.dependencia ? ` · ${cause.dependencia}` : ""}
             {cause.oficina ? ` · Carga en ${cause.oficina}` : ""}
             {cause.responsable ? ` · Recepción: ${cause.responsable}` : ""}
@@ -138,6 +216,7 @@ export function CasePage() {
         </section>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
+      {cause.provisorio ? <RegistroDefinitivoPanel cause={cause} onSaved={setCause} /> : null}
       <AportantePanel
         cause={cause}
         editing={editingAportante}
@@ -208,7 +287,7 @@ export function CasePage() {
         {cause.notas ? <p className="meta">{cause.notas}</p> : null}
         {packageHash ? (
           <div className="meta">
-            <div>Huella SHA-256 del paquete {nombreCarpetaExpediente(cause.expediente)}.zip</div>
+            <div>Huella SHA-256 del paquete {nombrePaquete(cause)}.zip</div>
             <div className="hash">{packageHash}</div>
             <div>
               <a href={`/api/cases/${id}/package/zip`}>Descargar zip</a>

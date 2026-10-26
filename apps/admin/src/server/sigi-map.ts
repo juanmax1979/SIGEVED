@@ -3,6 +3,8 @@ export type DependenciaSigi = {
   nombre: string;
   circunscripcion: string;
   rol: string;
+  sistema?: "sigi" | "iure";
+  fueroId?: string;
 };
 
 export type UsuarioSigi = {
@@ -58,7 +60,9 @@ function personName(row: Record<string, unknown>): string {
 }
 
 export function etiquetaDependencia(item: DependenciaSigi): string {
-  return [item.nombre, item.rol, item.circunscripcion].filter(Boolean).join(" · ");
+  const partes = [item.nombre, item.rol, item.circunscripcion].filter(Boolean);
+  if (item.sistema === "iure") partes.push("IURE");
+  return partes.join(" · ");
 }
 
 export function mapUsuario(rows: Record<string, unknown>[]): UsuarioSigi {
@@ -74,7 +78,7 @@ export function mapUsuario(rows: Record<string, unknown>[]): UsuarioSigi {
     const key = norm(id);
     if (seen.has(key)) continue;
     seen.add(key);
-    dependencias.push({ id, nombre: nombreDep, circunscripcion, rol });
+    dependencias.push({ id, nombre: nombreDep, circunscripcion, rol, sistema: "sigi" });
   }
   return { nombre, dependencias };
 }

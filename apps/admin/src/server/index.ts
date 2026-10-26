@@ -18,7 +18,10 @@ import {
   incorporarDispositivo,
   normalizarAportante,
   normalizarDispositivo,
+  expedienteYaCargado,
+  identificadorProvisorioValido,
   nombreCarpetaExpediente,
+  nombrePaquete,
   type CaseRecord,
   type CaseType,
   type DispositivoDetectado,
@@ -37,7 +40,8 @@ import { isLoopback, listLanHosts } from "./network.js";
 import { abrirCamaraTelefono, captureScreen, copiarMedio, imeiDelDispositivoConectado, leerMiniatura, listarMedios, mimeDeMedio, mirrorScreen, recordScreen, telefonoListo, traerFotoNueva, usbStatus } from "./adb.js";
 import { dniDesdeDirectorio } from "./directorio.js";
 import { datosExpediente, datosUsuario, dniConfigurado, mensajeSinSigi, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
-import { etiquetaDependencia } from "./sigi-map.js";
+import { cuentaIure, datosExpedienteIure, datosUsuarioIure, iureConfig } from "./iure.js";
+import { etiquetaDependencia, type DependenciaSigi, type ExpedienteSigi, type UsuarioSigi } from "./sigi-map.js";
 import { clientDist, dataDir, ensureDataDirs, rutaManual } from "./paths.js";
 import {
   caseBundle,
@@ -91,6 +95,71 @@ const datosDispositivo = {
 
 function caseIdDe(value: string | string[]): string {
   return Array.isArray(value) ? (value[0] ?? "") : value;
+}
+
+async function operadorHabilitado(): Promise<
+  | { error: string; status: 403 }
+  | { operator: NonNullable<ReturnType<typeof getOperator>>; user: UsuarioSigi; match: DependenciaSigi }
+> {
+  const operator = getOperator();
+  if (!operator || operator.username.toLowerCase() !== windowsUser().toLowerCase()) {
+    return { error: "Elegí una dependencia habilitada antes de cargar la causa.", status: 403 };
+  }
+  if (operator.sistema !== "iure" && !operator.dni) {
+    return { error: "Ingresá con tu DNI de SIGI. Solo se crean causas en una dependencia habilitada.", status: 403 };
+  }
+  const user = operator.sistema === "iure" ? await datosUsuarioIure(operator.username) : await datosUsuario(operator.dni);
+  const match = user.dependencias.find((item) => item.id === operator.oficinaId && (item.sistema ?? "sigi") === operator.sistema);
+  if (!match) {
+    return { error: "Elegí una dependencia habilitada antes de cargar la causa.", status: 403 };
+  }
+  return { operator, user, match };
+}
+
+async function catalogoIure(login: string): Promise<{ nombre: string; dni: string; dependencias: DependenciaSigi[]; error: string }> {
+  if (!iureConfig()) return { nombre: "", dni: "", dependencias: [], error: "" };
+  try {
+    const cuenta = await cuentaIure(login);
+    return { nombre: cuenta.usuario.nombre, dni: cuenta.dni, dependencias: cuenta.usuario.dependencias, error: "" };
+  } catch (error) {
+    return { nombre: "", dni: "", dependencias: [], error: error instanceof Error ? error.message : "No se pudo consultar IURE." };
+  }
+}
+
+async function expedienteEnIure(numero: string, dependencias: DependenciaSigi[]): Promise<ExpedienteSigi | undefined> {
+  for (const dep of dependencias) {
+    try {
+      return await datosExpedienteIure(numero, dep.id, dep.fueroId ?? "", dep.nombre);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes("no tiene ese expediente")) throw error;
+    }
+  }
+  return undefined;
+}
+
+async function expedienteSeleccionado(numero: string): Promise<ExpedienteSigi> {
+  const operator = getOperator();
+  const iure = await catalogoIure(operator?.username || windowsUser());
+  if (operator?.sistema === "iure") {
+    const dep = iure.dependencias.find((item) => item.id === operator.oficinaId);
+    const dependencia = dep?.nombre || operator.oficinaNombre.split("·")[0]?.trim() || "";
+    const fueroId = operator.fueroId || dep?.fueroId || "";
+    return datosExpedienteIure(numero, operator.oficinaId, fueroId, dependencia);
+  }
+  try {
+    return await datosExpediente(numero);
+  } catch (sigiError) {
+    const found = await expedienteEnIure(numero, iure.dependencias);
+    if (found) return found;
+    const base = sigiError instanceof Error ? sigiError.message : "No se pudo consultar SIGI.";
+    if (iure.dependencias.length === 0) {
+      const motivo = iure.error || "Este usuario no tiene dependencias habilitadas en IURE, por eso no se consulta ese sistema.";
+      throw new Error(`${base} ${motivo}`);
+    }
+    if (!/no devolvió|no tiene/i.test(base)) throw sigiError;
+    throw new Error("IURE no tiene ese expediente en las dependencias habilitadas.");
+  }
 }
 
 async function anotarDispositivo(
@@ -176,6 +245,23 @@ const caseInput = z.object({
   responsable: z.string().trim().max(120).default(""),
   notas: z.string().trim().max(2000).default(""),
 });
+const altaCausa = z.union([
+  z.object({
+    provisorio: z.literal(true),
+    identificador: z.string().trim().min(1).max(80),
+    notas: z.string().trim().max(2000).default(""),
+  }),
+  caseInput.extend({
+    provisorio: z.literal(false).optional(),
+    identificador: z.string().trim().max(80).optional(),
+  }),
+]);
+
+function esAltaProvisoria(
+  data: z.infer<typeof altaCausa>,
+): data is { provisorio: true; identificador: string; notas: string } {
+  return data.provisorio === true;
+}
 
 const app = express();
 app.disable("x-powered-by");
@@ -251,71 +337,80 @@ app.get("/api/sigi/me", async (req, res) => {
     oficinaNombre: "",
     error: "",
   };
-  if (!sigiConfig()) {
-    res.json({ ...empty, configured: false, needsDni: false, error: mensajeSinSigi() });
+  const iure = await catalogoIure(username);
+  const current = getOperator();
+  let needsDni = false;
+  let adDni = "";
+  let dni = "";
+  let sigiUser: UsuarioSigi = { nombre: "", dependencias: [] };
+  let sigiError = "";
+  if (sigiConfig()) {
+    try {
+      needsDni = await usuarioPideDni();
+      adDni = await dniDesdeDirectorio();
+      const requested = adDni ? "" : typeof req.query.dni === "string" ? req.query.dni.replace(/\D/g, "") : "";
+      dni =
+        adDni ||
+        dniDelUsuario({
+          windowsUser: username,
+          requested,
+          vinculo: getVinculo(username),
+          operator: current,
+          configured: dniConfigurado(),
+        });
+      if (needsDni && !dni) {
+        sigiError = "La cuenta de Active Directory no tiene DNI. Revisá el atributo employeeID.";
+      } else {
+        sigiUser = await datosUsuario(needsDni ? dni : username);
+      }
+    } catch (error) {
+      sigiError = error instanceof Error ? error.message : "No se pudo consultar SIGI.";
+    }
+  } else if (iure.dependencias.length === 0) {
+    res.json({ ...empty, configured: false, needsDni: false, error: iure.error || mensajeSinSigi() });
     return;
   }
-  try {
-    const needsDni = await usuarioPideDni();
-    const adDni = await dniDesdeDirectorio();
-    const requested = adDni ? "" : typeof req.query.dni === "string" ? req.query.dni.replace(/\D/g, "") : "";
-    const current = getOperator();
-    const dni =
-      adDni ||
-      dniDelUsuario({
-        windowsUser: username,
-        requested,
-        vinculo: getVinculo(username),
-        operator: current,
-        configured: dniConfigurado(),
-      });
-    if (needsDni && !dni) {
-      res.json({
-        ...empty,
-        error: "La cuenta de Active Directory no tiene DNI. Revisá el atributo employeeID.",
-      });
-      return;
-    }
-    const user = await datosUsuario(needsDni ? dni : username);
-    const sameUser = current?.username.toLowerCase() === username.toLowerCase();
-    const selected = sameUser ? user.dependencias.find((item) => item.id === current?.oficinaId) : undefined;
-    const only = user.dependencias.length === 1 ? user.dependencias[0] : undefined;
-    const office = selected ?? only ?? user.dependencias[0];
-    if (office && (!sameUser || current?.oficinaId !== office.id || current.dni !== dni)) {
-      await setOperator({
-        username,
-        nombre: user.nombre,
-        dni,
-        oficinaId: office.id,
-        oficinaNombre: etiquetaDependencia(office),
-      });
-    } else if (needsDni && dni && (user.nombre || user.dependencias.length > 0) && getVinculo(username) !== dni) {
-      await setVinculo(username, dni);
-    }
-    res.json({
-      configured: true,
-      needsDni,
+  const dependencias = [...sigiUser.dependencias, ...iure.dependencias];
+  const nombre = sigiUser.nombre || iure.nombre;
+  const dniCuenta = dni || iure.dni;
+  const sameUser = current?.username.toLowerCase() === username.toLowerCase();
+  const selected = sameUser
+    ? dependencias.find((item) => item.id === current?.oficinaId && (item.sistema ?? "sigi") === (current?.sistema ?? "sigi"))
+    : undefined;
+  const only = dependencias.length === 1 ? dependencias[0] : undefined;
+  const office = selected ?? only ?? dependencias[0];
+  if (office && (!sameUser || current?.oficinaId !== office.id || current?.sistema !== (office.sistema ?? "sigi") || current?.dni !== dniCuenta)) {
+    await setOperator({
       username,
-      dni,
-      origen: adDni ? "directorio" : "",
-      nombre: user.nombre,
-      dependencias: user.dependencias,
-      oficinaId: office?.id ?? "",
-      oficinaNombre: office ? etiquetaDependencia(office) : "",
-      error: user.dependencias.length === 0 ? "Este usuario no tiene dependencias habilitadas en SIGI." : "",
+      nombre,
+      dni: dniCuenta,
+      oficinaId: office.id,
+      oficinaNombre: etiquetaDependencia(office),
+      sistema: office.sistema ?? "sigi",
+      fueroId: office.fueroId ?? "",
     });
-  } catch (error) {
-    res.status(502).json({
-      ...empty,
-      needsDni: true,
-      error: error instanceof Error ? error.message : "No se pudo consultar SIGI.",
-    });
+  } else if (needsDni && dni && (sigiUser.nombre || sigiUser.dependencias.length > 0) && getVinculo(username) !== dni) {
+    await setVinculo(username, dni);
   }
+  const avisos = [dependencias.length === 0 && sigiConfig() && !sigiError ? "Este usuario no tiene dependencias habilitadas en SIGI." : "", sigiError, iure.error].filter(Boolean);
+  res.status(dependencias.length === 0 && avisos.length > 0 ? 502 : 200).json({
+    ...empty,
+    configured: true,
+    needsDni,
+    dni: dniCuenta,
+    origen: adDni ? "directorio" : "",
+    nombre,
+    sistema: office?.sistema ?? "sigi",
+    dependencias,
+    oficinaId: office?.id ?? "",
+    oficinaNombre: office ? etiquetaDependencia(office) : "",
+    error: dependencias.length === 0 ? avisos.join(" ") || "Este usuario no tiene dependencias habilitadas." : avisos.join(" "),
+  });
 });
 
 app.post("/api/sigi/oficina", async (req, res) => {
   try {
-    const body = z.object({ id: z.string().min(1), dni: z.string().optional() }).parse(req.body);
+    const body = z.object({ id: z.string().min(1), sistema: z.enum(["sigi", "iure"]).optional(), dni: z.string().optional() }).parse(req.body);
     const username = windowsUser();
     const adDni = await dniDesdeDirectorio();
     const dni =
@@ -327,7 +422,9 @@ app.post("/api/sigi/oficina", async (req, res) => {
         operator: getOperator(),
         configured: dniConfigurado(),
       });
-    const user = await datosUsuario(dni);
+    const sistema = body.sistema ?? "sigi";
+    const cuenta = sistema === "iure" ? await cuentaIure(username) : undefined;
+    const user = cuenta ? cuenta.usuario : await datosUsuario(dni);
     const office = user.dependencias.find((item) => item.id === body.id);
     if (!office) {
       res.status(400).json({ error: "Esa dependencia no está habilitada para este usuario." });
@@ -335,10 +432,12 @@ app.post("/api/sigi/oficina", async (req, res) => {
     }
     const operator = await setOperator({
       username,
-      nombre: user.nombre,
-      dni,
+      nombre: user.nombre || getOperator()?.nombre || "",
+      dni: dni || cuenta?.dni || "",
       oficinaId: office.id,
       oficinaNombre: etiquetaDependencia(office),
+      sistema,
+      fueroId: office.fueroId ?? "",
     });
     res.json({ operator });
   } catch (error) {
@@ -353,7 +452,7 @@ app.get("/api/sigi/expediente", async (req, res) => {
     return;
   }
   try {
-    const found = await datosExpediente(numero.data);
+    const found = await expedienteSeleccionado(numero.data);
     res.json({ expediente: found });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "No se pudo consultar el expediente." });
@@ -373,40 +472,130 @@ app.get("/api/cases", (_req, res) => {
 });
 
 app.post("/api/cases", async (req, res) => {
-  const parsed = caseInput.safeParse(req.body);
+  const parsed = altaCausa.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Revisá los datos de la causa." });
     return;
   }
   try {
-    const operator = getOperator();
-    if (!operator?.dni || operator.username.toLowerCase() !== windowsUser().toLowerCase()) {
-      res.status(403).json({ error: "Ingresá con tu DNI de SIGI. Solo se crean causas en una dependencia habilitada." });
+    const sesion = await operadorHabilitado();
+    if ("error" in sesion) {
+      res.status(sesion.status).json({ error: sesion.error });
       return;
     }
-    const user = await datosUsuario(operator.dni);
-    const match = user.dependencias.find((item) => mismaDependencia(item.nombre, parsed.data.dependencia));
+    if (esAltaProvisoria(parsed.data)) {
+      if (!identificadorProvisorioValido(parsed.data.identificador)) {
+        res.status(400).json({ error: "Escribí una identificación provisoria con letras o números." });
+        return;
+      }
+      const identificador = parsed.data.identificador.trim();
+      const cause = await createCase({
+        caratula: identificador.length >= 3 ? identificador : `Causa ${identificador}`,
+        expediente: "",
+        tipo: "otro",
+        dependencia: sesion.match.nombre,
+        oficina: etiquetaDependencia(sesion.match),
+        proceso: "",
+        responsable: sesion.user.nombre,
+        notas: parsed.data.notas,
+        provisorio: true,
+        identificador,
+      });
+      res.status(201).json({ case: cause });
+      return;
+    }
+    const definitivo = parsed.data;
+    const match = sesion.user.dependencias.find((item) => mismaDependencia(item.nombre, definitivo.dependencia));
     if (!match) {
       res.status(403).json({
         error: "No podés cargar evidencia en esta causa. La dependencia del expediente no está habilitada para tu usuario en SIGI.",
       });
       return;
     }
-    if (operator.oficinaId !== match.id) {
+    if (sesion.operator.oficinaId !== match.id) {
       res.status(403).json({
         error: `Este expediente corresponde a ${etiquetaDependencia(match)}. Elegí esa dependencia para cargar la evidencia.`,
       });
       return;
     }
+    if (expedienteYaCargado(readSnapshot().cases, definitivo.expediente)) {
+      res.status(409).json({ error: "Ya existe ese número de causa cargada." });
+      return;
+    }
     const cause = await createCase({
-      ...parsed.data,
+      ...definitivo,
       dependencia: match.nombre,
       oficina: etiquetaDependencia(match),
-      responsable: user.nombre || parsed.data.responsable,
+      responsable: sesion.user.nombre || definitivo.responsable,
+      provisorio: false,
     });
     res.status(201).json({ case: cause });
   } catch (error) {
     res.status(502).json({ error: error instanceof Error ? error.message : "No se pudo verificar la dependencia en SIGI." });
+  }
+});
+
+app.post("/api/cases/:id/definitivo", async (req, res) => {
+  const caseId = caseIdDe(req.params.id);
+  const numero = z.object({ expediente: z.string().trim().min(1).max(80) }).safeParse(req.body);
+  if (!numero.success) {
+    res.status(400).json({ error: "Escribí el número de expediente." });
+    return;
+  }
+  const actual = caseBundle(caseId).cause;
+  if (!actual) {
+    res.status(404).json({ error: "No encontramos esa causa." });
+    return;
+  }
+  if (!actual.provisorio) {
+    res.status(400).json({ error: "Esta causa ya es un registro definitivo." });
+    return;
+  }
+  try {
+    const sesion = await operadorHabilitado();
+    if ("error" in sesion) {
+      res.status(sesion.status).json({ error: sesion.error });
+      return;
+    }
+    const found = await expedienteSeleccionado(numero.data.expediente);
+    if (!found.caratula) {
+      res.status(404).json({ error: "SIGI no tiene ese expediente." });
+      return;
+    }
+    const match = sesion.user.dependencias.find((item) => mismaDependencia(item.nombre, found.dependencia));
+    if (!match) {
+      res.status(403).json({
+        error: "No podés cargar evidencia en esta causa. La dependencia del expediente no está habilitada para tu usuario en SIGI.",
+      });
+      return;
+    }
+    if (sesion.operator.oficinaId !== match.id) {
+      res.status(403).json({
+        error: `Este expediente corresponde a ${etiquetaDependencia(match)}. Elegí esa dependencia para cargar la evidencia.`,
+      });
+      return;
+    }
+    const numeroGuardado = found.expediente || numero.data.expediente;
+    if (expedienteYaCargado(readSnapshot().cases, numeroGuardado, caseId)) {
+      res.status(409).json({ error: "Ya existe ese número de causa cargada." });
+      return;
+    }
+    const cause = await updateCase(caseId, {
+      expediente: numeroGuardado,
+      caratula: found.caratula,
+      dependencia: match.nombre,
+      oficina: etiquetaDependencia(match),
+      proceso: found.proceso,
+      responsable: sesion.user.nombre || actual.responsable,
+      provisorio: false,
+    });
+    if (!cause) {
+      res.status(404).json({ error: "No encontramos esa causa." });
+      return;
+    }
+    res.json({ case: cause });
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error ? error.message : "No se pudo consultar el expediente." });
   }
 });
 
@@ -866,7 +1055,7 @@ app.get("/api/cases/:id/package/zip", (req, res) => {
     return;
   }
   const cause = caseBundle(req.params.id).cause;
-  const nombre = cause ? `${nombreCarpetaExpediente(cause.expediente)}.zip` : "expediente.zip";
+  const nombre = cause ? `${nombrePaquete(cause)}.zip` : "expediente.zip";
   res.download(zipPath, nombre);
 });
 
@@ -1129,7 +1318,7 @@ async function fillArchive(
     for (const item of dispositivos) await registrarDispositivo(cause.id, item);
     cause.dispositivos = dispositivos;
   }
-  const carpeta = nombreCarpetaExpediente(cause.expediente);
+  const carpeta = nombrePaquete(cause);
   const dentro = (name: string) => `${carpeta}/${name}`;
   const manifest = {
     sistema: "SIGEVED",

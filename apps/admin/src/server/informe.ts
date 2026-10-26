@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { createWriteStream } from "node:fs";
 import type { Writable } from "node:stream";
-import { formatBytes, formatoDni, labelCaracter, labelCaseType, labelCategory, nombreCarpetaExpediente, type CaseRecord, type EvidenceRecord, type PairingSession } from "@espejo/shared";
+import { formatBytes, formatoDni, labelCaracter, labelCaseType, labelCategory, nombrePaquete, type CaseRecord, type EvidenceRecord, type PairingSession } from "@espejo/shared";
 
 const require = createRequire(import.meta.url);
 const PDFDocument = require("pdfkit") as new (options?: Record<string, unknown>) => Pdf;
@@ -82,7 +82,7 @@ export function escribirInformePdf(filePath: string, data: InformePdf): Promise<
   const output = createWriteStream(filePath);
   doc.pipe(output);
 
-  const paquete = `${nombreCarpetaExpediente(data.cause.expediente)}.zip`;
+  const paquete = `${nombrePaquete(data.cause)}.zip`;
   let y = encabezado(doc, false);
   y = titulo(doc, y, paquete);
   y = ficha(doc, y, data);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { causaDeOficina, mismaDependencia, type CaseRecord } from "@espejo/shared";
+import { causaDeOficina, identificadorProvisorioValido, mismaDependencia, type CaseRecord } from "@espejo/shared";
 import { api } from "../api";
 import { SigiBar, type SigiSession } from "./SigiBar";
 
@@ -106,10 +106,14 @@ export function CasesPage() {
                 <TrashIcon />
               </button>
               <Link to={`/causas/${cause.id}`} className="card-link">
-                {cause.proceso ? <div className="kicker">{cause.proceso}</div> : null}
+                {cause.provisorio ? <div className="kicker">Registro provisorio</div> : cause.proceso ? <div className="kicker">{cause.proceso}</div> : null}
                 <h2>{cause.caratula}</h2>
                 <p className="meta">
-                  {cause.expediente || "Sin expediente"} · {cause.evidenceCount === 1 ? "1 archivo" : `${cause.evidenceCount} archivos`}
+                  {cause.provisorio
+                    ? `Provisorio · ${cause.identificador || cause.caratula}`
+                    : cause.expediente || "Sin expediente"}
+                  {" · "}
+                  {cause.evidenceCount === 1 ? "1 archivo" : `${cause.evidenceCount} archivos`}
                 </p>
               </Link>
             </article>
@@ -133,6 +137,8 @@ function TrashIcon() {
 
 function NewCase({ sigi, onCreated }: { sigi: SigiSession | null; onCreated: () => Promise<void> }) {
   const navigate = useNavigate();
+  const [modo, setModo] = useState<"" | "definitivo" | "provisorio">("");
+  const [identificador, setIdentificador] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [looking, setLooking] = useState(false);
@@ -169,6 +175,28 @@ function NewCase({ sigi, onCreated }: { sigi: SigiSession | null; onCreated: () 
       setError(reason instanceof Error ? reason.message : "No se pudo consultar el expediente.");
     } finally {
       setLooking(false);
+    }
+  }
+
+  async function submitProvisorio(event: FormEvent) {
+    event.preventDefault();
+    if (!identificadorProvisorioValido(identificador)) {
+      setError("Escribí una identificación provisoria con letras o números.");
+      return;
+    }
+    setPending(true);
+    setError("");
+    try {
+      const created = await api<{ case: CaseRecord }>("/api/cases", {
+        method: "POST",
+        body: JSON.stringify({ provisorio: true, identificador: identificador.trim(), tipo: "otro" }),
+      });
+      await onCreated();
+      navigate(`/causas/${created.case.id}`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No se pudo crear la causa.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -211,9 +239,59 @@ function NewCase({ sigi, onCreated }: { sigi: SigiSession | null; onCreated: () 
     return "";
   }, [form.dependencia, sigi]);
 
+  if (!modo) {
+    return (
+      <section className="panel" style={{ marginBottom: 18 }}>
+        <h2>Nueva causa</h2>
+        <p className="meta">Elegí si la causa ya tiene número de expediente o si vas a identificarla de manera provisoria.</p>
+        <div className="row" style={{ marginTop: 14 }}>
+          <button className="btn" type="button" onClick={() => setModo("definitivo")}>
+            Registro Definitivo
+          </button>
+          <button className="btn" type="button" onClick={() => setModo("provisorio")}>
+            Registro Provisorio
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (modo === "provisorio") {
+    return (
+      <form className="panel form" onSubmit={submitProvisorio} style={{ marginBottom: 18 }}>
+        <h2>Registro provisorio</h2>
+        <p className="meta">
+          Usalo cuando todavía no hay número de expediente. Más adelante se puede completar con la consulta a SIGI.
+        </p>
+        <label>
+          Identificación provisoria
+          <input
+            value={identificador}
+            onChange={(event) => setIdentificador(event.target.value)}
+            placeholder="PEDRO PASCAL S/ DENUNCIA"
+            required
+          />
+        </label>
+        {identificador.trim() && !identificadorProvisorioValido(identificador) ? (
+          <p className="error">Usá letras o números. También podés usar espacios, la barra y el guion.</p>
+        ) : null}
+        {sigi?.oficinaNombre ? <p className="meta">La evidencia se carga en {sigi.oficinaNombre}.</p> : null}
+        {error ? <p className="error">{error}</p> : null}
+        <div className="row">
+          <button className="btn-ghost" type="button" onClick={() => { setModo(""); setError(""); }}>
+            Volver
+          </button>
+          <button className="btn" disabled={pending || !identificadorProvisorioValido(identificador)}>
+            {pending ? "Guardando…" : "Crear causa"}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   return (
     <form className="panel form" onSubmit={submit} style={{ marginBottom: 18 }}>
-      <h2>Nueva causa</h2>
+      <h2>Registro definitivo</h2>
       <label>
         Expediente
         <input value={form.expediente} onChange={(event) => setForm({ ...form, expediente: event.target.value })} required />
@@ -245,6 +323,9 @@ function NewCase({ sigi, onCreated }: { sigi: SigiSession | null; onCreated: () 
       {error ? <p className="error">{error}</p> : null}
       {habilitacion ? <p className="error">{habilitacion}</p> : null}
       <div className="row">
+        <button className="btn-ghost" type="button" onClick={() => { setModo(""); setError(""); }}>
+          Volver
+        </button>
         <button className="btn" disabled={pending || !form.caratula || !form.dependencia || Boolean(habilitacion)}>
           {pending ? "Guardando…" : "Crear causa"}
         </button>

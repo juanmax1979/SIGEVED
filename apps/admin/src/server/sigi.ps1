@@ -4,12 +4,16 @@ $ProgressPreference = "SilentlyContinue"
 
 $allowed = @(
   "procNumeradorDatosUsuarioSIGI_DepsCircNomyApe",
-  "procNumeradorDatosExpteCaratProcDepRadic"
+  "procNumeradorDatosExpteCaratProcDepRadic",
+  "spGetDatosLoginNumerador",
+  "spGetDatosExpedienteNumerador"
 )
 
 try {
   Add-Type -AssemblyName System.Data
-  $cfg = [Console]::In.ReadToEnd() | ConvertFrom-Json
+  $utf8 = New-Object System.Text.UTF8Encoding $false
+  $reader = New-Object System.IO.StreamReader ([Console]::OpenStandardInput()), $utf8
+  $cfg = $reader.ReadToEnd() | ConvertFrom-Json
   if ($allowed -notcontains $cfg.procedure) {
     throw "Procedimiento no habilitado."
   }
@@ -53,10 +57,13 @@ ORDER BY ORDINAL_POSITION
       $cmd.CommandType = [System.Data.CommandType]::StoredProcedure
       $schemaName = [string]$cfg.schema
       if ($schemaName) { $cmd.CommandText = "$schemaName.$($cfg.procedure)" } else { $cmd.CommandText = [string]$cfg.procedure }
-      if ($cfg.parameter) {
-        $name = [string]$cfg.parameter.name
-        $type = ([string]$cfg.parameter.type).ToLower()
-        $raw = [string]$cfg.parameter.value
+      $parametros = @()
+      if ($cfg.parameters) { $parametros = @($cfg.parameters) }
+      elseif ($cfg.parameter) { $parametros = @($cfg.parameter) }
+      foreach ($parameter in $parametros) {
+        $name = [string]$parameter.name
+        $type = ([string]$parameter.type).ToLower()
+        $raw = [string]$parameter.value
         switch ($type) {
           "int" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Int); $added.Value = [int]$raw }
           "bigint" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::BigInt); $added.Value = [int64]$raw }
@@ -66,6 +73,7 @@ ORDER BY ORDINAL_POSITION
           "numeric" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Decimal); $added.Value = [decimal]$raw }
           "float" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Float); $added.Value = [double]$raw }
           "real" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Real); $added.Value = [single]$raw }
+          "varchar" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::VarChar, 255); $added.Value = $raw }
           default { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::NVarChar, 200); $added.Value = $raw }
         }
       }
