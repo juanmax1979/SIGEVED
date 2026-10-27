@@ -106,13 +106,18 @@ export function CasePage() {
   const [deleting, setDeleting] = useState(false);
   const [editingAportante, setEditingAportante] = useState(false);
   const [wifiAbierta, setWifiAbierta] = useState(false);
+  const [carga, setCarga] = useState<{ cargada: boolean; detalle: string }>({
+    cargada: false,
+    detalle: "Se habilita cuando la evidencia esté cargada en SIGI o IURE.",
+  });
 
   function reload() {
-    api<{ cause: CaseRecord; evidence: EvidenceRecord[]; sessions: PairingSession[] }>(`/api/cases/${id}`)
+    api<{ cause: CaseRecord; evidence: EvidenceRecord[]; sessions: PairingSession[]; carga?: { cargada: boolean; detalle: string } }>(`/api/cases/${id}`)
       .then((data) => {
         setCause(data.cause);
         setEvidence(data.evidence);
         setSessions(data.sessions);
+        if (data.carga) setCarga(data.carga);
         if (errorAportante(data.cause.aportante) || !data.cause.aportante.dniFoto) setEditingAportante(true);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo abrir la causa."));
@@ -193,7 +198,17 @@ export function CasePage() {
           >
             Datos del aportante
           </button>
-          <button className="btn-danger" type="button" onClick={() => setConfirming(true)}>
+          <button
+            className="btn-danger"
+            type="button"
+            onClick={() => setConfirming(true)}
+            disabled={cause.provisorio || !carga.cargada}
+            title={
+              cause.provisorio
+                ? "Un registro provisorio no se puede eliminar hasta que tenga número de expediente definitivo y la evidencia esté cargada en SIGI o IURE."
+                : carga.detalle
+            }
+          >
             Eliminar causa
           </button>
           <Link to="/" className="btn-ghost">
@@ -216,7 +231,7 @@ export function CasePage() {
         </section>
       ) : null}
       {error ? <p className="error">{error}</p> : null}
-      {cause.provisorio ? <RegistroDefinitivoPanel cause={cause} onSaved={setCause} /> : null}
+      {cause.provisorio ? <RegistroDefinitivoPanel cause={cause} onSaved={() => reload()} /> : null}
       <AportantePanel
         cause={cause}
         editing={editingAportante}

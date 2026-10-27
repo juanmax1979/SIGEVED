@@ -4,7 +4,9 @@ import { causaDeOficina, identificadorProvisorioValido, mismaDependencia, type C
 import { api } from "../api";
 import { SigiBar, type SigiSession } from "./SigiBar";
 
-type ListedCase = CaseRecord & { evidenceCount: number };
+type CargaEvidencia = { cargada: boolean; sistema: "" | "sigi" | "iure"; detalle: string };
+
+type ListedCase = CaseRecord & { evidenceCount: number; carga?: CargaEvidencia };
 
 export function CasesPage() {
   const [cases, setCases] = useState<ListedCase[]>([]);
@@ -102,7 +104,18 @@ export function CasesPage() {
         <div className="grid cards">
           {visibles.map((cause) => (
             <article key={cause.id} className="card case-card">
-              <button className="card-trash" type="button" aria-label={`Eliminar ${cause.caratula}`} onClick={() => setPendingDelete(cause)}>
+              <button
+                className="card-trash"
+                type="button"
+                aria-label={`Eliminar ${cause.caratula}`}
+                title={
+                  cause.provisorio
+                    ? "Un registro provisorio no se puede eliminar hasta que tenga número de expediente definitivo y la evidencia esté cargada en SIGI o IURE."
+                    : cause.carga?.detalle || "Se habilita cuando la evidencia esté cargada en SIGI o IURE."
+                }
+                disabled={Boolean(cause.provisorio) || !cause.carga?.cargada}
+                onClick={() => setPendingDelete(cause)}
+              >
                 <TrashIcon />
               </button>
               <Link to={`/causas/${cause.id}`} className="card-link">

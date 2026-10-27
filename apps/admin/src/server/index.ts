@@ -42,6 +42,7 @@ import { dniDesdeDirectorio } from "./directorio.js";
 import { datosExpediente, datosUsuario, dniConfigurado, mensajeSinSigi, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
 import { cuentaIure, datosExpedienteIure, datosUsuarioIure, iureConfig } from "./iure.js";
 import { etiquetaDependencia, type DependenciaSigi, type ExpedienteSigi, type UsuarioSigi } from "./sigi-map.js";
+import { consultaCargaEvidencia } from "./carga-sistema.js";
 import { clientDist, dataDir, ensureDataDirs, rutaManual } from "./paths.js";
 import {
   caseBundle,
@@ -467,6 +468,7 @@ app.get("/api/cases", (_req, res) => {
     .map((cause) => ({
       ...cause,
       evidenceCount: db.evidence.filter((item) => item.caseId === cause.id).length,
+      carga: consultaCargaEvidencia(cause),
     }));
   res.json({ cases });
 });
@@ -600,6 +602,16 @@ app.post("/api/cases/:id/definitivo", async (req, res) => {
 });
 
 app.delete("/api/cases/:id", (req, res) => {
+  const cause = caseBundle(req.params.id).cause;
+  if (!cause) {
+    res.status(404).json({ error: "No encontramos esa causa." });
+    return;
+  }
+  const carga = consultaCargaEvidencia(cause);
+  if (!carga.cargada) {
+    res.status(403).json({ error: carga.detalle });
+    return;
+  }
   deleteCase(req.params.id)
     .then((removed) => {
       if (!removed) {
@@ -617,7 +629,7 @@ app.get("/api/cases/:id", (req, res) => {
     res.status(404).json({ error: "No encontramos esa causa." });
     return;
   }
-  res.json(bundle);
+  res.json({ ...bundle, carga: consultaCargaEvidencia(bundle.cause) });
 });
 
 const casePatch = z.object({

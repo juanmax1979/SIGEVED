@@ -101,7 +101,8 @@ h2 { font-size: 22px; }
   display: grid;
   place-items: center;
 }
-.card-trash:hover { background: #fdeceb; color: var(--danger); }
+.card-trash:hover:not(:disabled) { background: #fdeceb; color: var(--danger); }
+.card-trash:disabled { opacity: 0.35; cursor: not-allowed; }
 .panel { padding: 22px; }
 .kicker {
   display: inline-block;
