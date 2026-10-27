@@ -110,8 +110,8 @@ export function CasesPage() {
                 aria-label={`Eliminar ${cause.caratula}`}
                 title={
                   cause.provisorio
-                    ? "Un registro provisorio no se puede eliminar hasta que tenga número de expediente definitivo y la evidencia esté cargada en SIGI o IURE."
-                    : cause.carga?.detalle || "Se habilita cuando la evidencia esté cargada en SIGI o IURE."
+                    ? "Un registro provisorio no se puede eliminar hasta que tenga número de expediente definitivo y la evidencia esté incorporada en SIGI o IURE."
+                    : cause.carga?.detalle || "Se habilita cuando la evidencia esté incorporada en SIGI o IURE."
                 }
                 disabled={Boolean(cause.provisorio) || !cause.carga?.cargada}
                 onClick={() => setPendingDelete(cause)}

@@ -1,5 +1,4 @@
-/** Datos de prueba hasta que SIGI e IURE expongan el servicio que confirma la carga de la evidencia. */
+/** Datos de prueba de IURE hasta que ese sistema exponga el servicio que confirma la carga. SIGI se consulta con usp_PruebaDigital_VerificarIncorporacion. */
 export const cargasEvidenciaMock = [
-  { sistema: "sigi" as const, expediente: "18326/2017-1" },
   { sistema: "iure" as const, expediente: "3921/2026-1-C" },
 ];

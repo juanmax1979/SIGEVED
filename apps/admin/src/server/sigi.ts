@@ -3,10 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dataDir } from "./paths.js";
+import { incorporacionesDesdeSql } from "./carga-sistema.js";
 import { mapExpediente, mapUsuario, type ExpedienteSigi, type UsuarioSigi } from "./sigi-map.js";
 
 const USER_PROC = "procNumeradorDatosUsuarioSIGI_DepsCircNomyApe";
 const EXPTE_PROC = "procNumeradorDatosExpteCaratProcDepRadic";
+const PRUEBA_PROC = "usp_PruebaDigital_VerificarIncorporacion";
 const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "sigi.ps1");
 
 type SigiConfig = {
@@ -60,7 +62,7 @@ function connectionString(config: SigiConfig): string {
   return `${base};Integrated Security=True`;
 }
 
-export function consultarSql(payload: unknown, origen = "SIGI"): Promise<unknown> {
+export function consultarSql(payload: unknown, origen = "SIGI", timeoutMs = 20000): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       "powershell.exe",
@@ -72,7 +74,7 @@ export function consultarSql(payload: unknown, origen = "SIGI"): Promise<unknown
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error(`${origen} no respondió a tiempo.`));
-    }, 20000);
+    }, timeoutMs);
     child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
     child.on("error", (error) => {
@@ -166,6 +168,32 @@ export function dniConfigurado(): string {
 export async function datosUsuario(dni: string): Promise<UsuarioSigi> {
   const rows = await execProc(USER_PROC, dni, ["dni", "usuario", "login", "cuil", "operador"]);
   return mapUsuario(rows);
+}
+
+export async function verificarIncorporacionSigi(
+  archivos: { expediente: string; nombre: string; sha256: string }[],
+): Promise<boolean[]> {
+  if (archivos.length === 0) return [];
+  const config = sigiConfig();
+  if (!config) throw new Error(mensajeSinSigi());
+  const payload = await consultarSql(
+    {
+      connectionString: connectionString(config),
+      action: "exec-batch",
+      calls: archivos.map((archivo) => ({
+        procedure: PRUEBA_PROC,
+        schema: "dbo",
+        parameters: [
+          { name: "@Expediente", type: "varchar", value: archivo.expediente },
+          { name: "@NombreArchivoFisico", type: "varchar", value: archivo.nombre },
+          { name: "@CodigoSha256Hex", type: "char", value: archivo.sha256 },
+        ],
+      })),
+    },
+    "SIGI",
+    Math.min(120000, 8000 + archivos.length * 1500),
+  );
+  return incorporacionesDesdeSql(payload, archivos.length);
 }
 
 export async function datosExpediente(numero: string): Promise<ExpedienteSigi> {

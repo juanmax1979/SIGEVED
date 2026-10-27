@@ -39,10 +39,10 @@ import { escribirInformePdf } from "./informe.js";
 import { isLoopback, listLanHosts } from "./network.js";
 import { abrirCamaraTelefono, captureScreen, copiarMedio, imeiDelDispositivoConectado, leerMiniatura, listarMedios, mimeDeMedio, mirrorScreen, recordScreen, telefonoListo, traerFotoNueva, usbStatus } from "./adb.js";
 import { dniDesdeDirectorio } from "./directorio.js";
-import { datosExpediente, datosUsuario, dniConfigurado, mensajeSinSigi, sigiConfig, usuarioPideDni, windowsUser } from "./sigi.js";
+import { datosExpediente, datosUsuario, dniConfigurado, mensajeSinSigi, sigiConfig, usuarioPideDni, verificarIncorporacionSigi, windowsUser } from "./sigi.js";
 import { cuentaIure, datosExpedienteIure, datosUsuarioIure, iureConfig } from "./iure.js";
 import { etiquetaDependencia, type DependenciaSigi, type ExpedienteSigi, type UsuarioSigi } from "./sigi-map.js";
-import { consultaCargaEvidencia } from "./carga-sistema.js";
+import { consultarCargas, esOficinaIure } from "./carga-sistema.js";
 import { clientDist, dataDir, ensureDataDirs, rutaManual } from "./paths.js";
 import {
   caseBundle,
@@ -460,17 +460,28 @@ app.get("/api/sigi/expediente", async (req, res) => {
   }
 });
 
-app.get("/api/cases", (_req, res) => {
+async function paqueteDeCausa(cause: CaseRecord): Promise<{ nombre: string; sha256: string } | undefined> {
+  if (cause.provisorio || esOficinaIure(cause.oficina)) return undefined;
+  const zipPath = packagePath(cause.id, "evidencia.zip");
+  if (!existsSync(zipPath)) return undefined;
+  return { nombre: `${nombrePaquete(cause)}.zip`, sha256: await sha256File(zipPath) };
+}
+
+app.get("/api/cases", async (_req, res) => {
   const db = readSnapshot();
   const oficina = getOperator()?.oficinaNombre ?? "";
-  const cases = db.cases
-    .filter((cause) => causaDeOficina(cause, oficina))
-    .map((cause) => ({
+  const cases = db.cases.filter((cause) => causaDeOficina(cause, oficina));
+  const cargas = await consultarCargas(
+    await Promise.all(cases.map(async (cause) => ({ cause, paquete: await paqueteDeCausa(cause) }))),
+    verificarIncorporacionSigi,
+  );
+  res.json({
+    cases: cases.map((cause, index) => ({
       ...cause,
       evidenceCount: db.evidence.filter((item) => item.caseId === cause.id).length,
-      carga: consultaCargaEvidencia(cause),
-    }));
-  res.json({ cases });
+      carga: cargas[index],
+    })),
+  });
 });
 
 app.post("/api/cases", async (req, res) => {
@@ -601,13 +612,13 @@ app.post("/api/cases/:id/definitivo", async (req, res) => {
   }
 });
 
-app.delete("/api/cases/:id", (req, res) => {
-  const cause = caseBundle(req.params.id).cause;
-  if (!cause) {
+app.delete("/api/cases/:id", async (req, res) => {
+  const bundle = caseBundle(req.params.id);
+  if (!bundle.cause) {
     res.status(404).json({ error: "No encontramos esa causa." });
     return;
   }
-  const carga = consultaCargaEvidencia(cause);
+  const [carga] = await consultarCargas([{ cause: bundle.cause, paquete: await paqueteDeCausa(bundle.cause) }], verificarIncorporacionSigi);
   if (!carga.cargada) {
     res.status(403).json({ error: carga.detalle });
     return;
@@ -623,13 +634,14 @@ app.delete("/api/cases/:id", (req, res) => {
     .catch(nextError(res));
 });
 
-app.get("/api/cases/:id", (req, res) => {
+app.get("/api/cases/:id", async (req, res) => {
   const bundle = caseBundle(req.params.id);
   if (!bundle.cause) {
     res.status(404).json({ error: "No encontramos esa causa." });
     return;
   }
-  res.json({ ...bundle, carga: consultaCargaEvidencia(bundle.cause) });
+  const [carga] = await consultarCargas([{ cause: bundle.cause, paquete: await paqueteDeCausa(bundle.cause) }], verificarIncorporacionSigi);
+  res.json({ ...bundle, carga });
 });
 
 const casePatch = z.object({

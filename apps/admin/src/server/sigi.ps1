@@ -5,17 +5,66 @@ $ProgressPreference = "SilentlyContinue"
 $allowed = @(
   "procNumeradorDatosUsuarioSIGI_DepsCircNomyApe",
   "procNumeradorDatosExpteCaratProcDepRadic",
+  "usp_PruebaDigital_VerificarIncorporacion",
   "spGetDatosLoginNumerador",
   "spGetDatosExpedienteNumerador"
 )
+
+function Add-SqlParameter($cmd, $parameter) {
+  $name = [string]$parameter.name
+  $type = ([string]$parameter.type).ToLower()
+  $raw = [string]$parameter.value
+  switch ($type) {
+    "int" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Int); $added.Value = [int]$raw }
+    "bigint" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::BigInt); $added.Value = [int64]$raw }
+    "smallint" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::SmallInt); $added.Value = [int16]$raw }
+    "tinyint" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::TinyInt); $added.Value = [byte]$raw }
+    "decimal" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Decimal); $added.Value = [decimal]$raw }
+    "numeric" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Decimal); $added.Value = [decimal]$raw }
+    "float" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Float); $added.Value = [double]$raw }
+    "real" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Real); $added.Value = [single]$raw }
+    "char" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Char, 64); $added.Value = $raw }
+    "varchar" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::VarChar, 260); $added.Value = $raw }
+    default { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::NVarChar, 260); $added.Value = $raw }
+  }
+}
+
+function Invoke-Procedure($connection, $call) {
+  $cmd = $connection.CreateCommand()
+  $cmd.CommandType = [System.Data.CommandType]::StoredProcedure
+  $schemaName = [string]$call.schema
+  if ($schemaName) { $cmd.CommandText = "$schemaName.$($call.procedure)" } else { $cmd.CommandText = [string]$call.procedure }
+  $parametros = @()
+  if ($call.parameters) { $parametros = @($call.parameters) }
+  elseif ($call.parameter) { $parametros = @($call.parameter) }
+  foreach ($parameter in $parametros) { Add-SqlParameter $cmd $parameter }
+  $adapter = New-Object System.Data.SqlClient.SqlDataAdapter $cmd
+  $table = New-Object System.Data.DataTable
+  [void]$adapter.Fill($table)
+  $rows = @()
+  foreach ($row in $table.Rows) {
+    $obj = [ordered]@{}
+    foreach ($col in $table.Columns) {
+      $val = $row[$col]
+      if ($null -eq $val -or $val -is [System.DBNull]) { $obj[$col.ColumnName] = "" }
+      else { $obj[$col.ColumnName] = [string]$val }
+    }
+    $rows += [pscustomobject]$obj
+  }
+  return @($rows)
+}
 
 try {
   Add-Type -AssemblyName System.Data
   $utf8 = New-Object System.Text.UTF8Encoding $false
   $reader = New-Object System.IO.StreamReader ([Console]::OpenStandardInput()), $utf8
   $cfg = $reader.ReadToEnd() | ConvertFrom-Json
-  if ($allowed -notcontains $cfg.procedure) {
-    throw "Procedimiento no habilitado."
+  $calls = @()
+  if ($cfg.action -eq "exec-batch") { $calls = @($cfg.calls) }
+  elseif ($cfg.procedure) { $calls = @($cfg) }
+  if ($calls.Count -eq 0) { throw "Procedimiento no habilitado." }
+  foreach ($call in $calls) {
+    if ($allowed -notcontains [string]$call.procedure) { throw "Procedimiento no habilitado." }
   }
   $conn = New-Object System.Data.SqlClient.SqlConnection $cfg.connectionString
   $conn.Open()
@@ -52,44 +101,15 @@ ORDER BY ORDINAL_POSITION
         if ($schemaValue) { $schema = [string]$schemaValue }
       }
       [pscustomobject]@{ schema = $schema; parameters = $parameters } | ConvertTo-Json -Depth 4 -Compress
+    } elseif ($cfg.action -eq "exec-batch") {
+      $resultados = @()
+      foreach ($call in $calls) {
+        $rows = Invoke-Procedure $conn $call
+        $resultados += [pscustomobject]@{ rows = $rows }
+      }
+      [pscustomobject]@{ resultados = @($resultados) } | ConvertTo-Json -Depth 6 -Compress
     } else {
-      $cmd = $conn.CreateCommand()
-      $cmd.CommandType = [System.Data.CommandType]::StoredProcedure
-      $schemaName = [string]$cfg.schema
-      if ($schemaName) { $cmd.CommandText = "$schemaName.$($cfg.procedure)" } else { $cmd.CommandText = [string]$cfg.procedure }
-      $parametros = @()
-      if ($cfg.parameters) { $parametros = @($cfg.parameters) }
-      elseif ($cfg.parameter) { $parametros = @($cfg.parameter) }
-      foreach ($parameter in $parametros) {
-        $name = [string]$parameter.name
-        $type = ([string]$parameter.type).ToLower()
-        $raw = [string]$parameter.value
-        switch ($type) {
-          "int" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Int); $added.Value = [int]$raw }
-          "bigint" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::BigInt); $added.Value = [int64]$raw }
-          "smallint" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::SmallInt); $added.Value = [int16]$raw }
-          "tinyint" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::TinyInt); $added.Value = [byte]$raw }
-          "decimal" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Decimal); $added.Value = [decimal]$raw }
-          "numeric" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Decimal); $added.Value = [decimal]$raw }
-          "float" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Float); $added.Value = [double]$raw }
-          "real" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::Real); $added.Value = [single]$raw }
-          "varchar" { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::VarChar, 255); $added.Value = $raw }
-          default { $added = $cmd.Parameters.Add($name, [System.Data.SqlDbType]::NVarChar, 200); $added.Value = $raw }
-        }
-      }
-      $adapter = New-Object System.Data.SqlClient.SqlDataAdapter $cmd
-      $table = New-Object System.Data.DataTable
-      [void]$adapter.Fill($table)
-      $rows = @()
-      foreach ($row in $table.Rows) {
-        $obj = [ordered]@{}
-        foreach ($col in $table.Columns) {
-          $val = $row[$col]
-          if ($null -eq $val -or $val -is [System.DBNull]) { $obj[$col.ColumnName] = "" }
-          else { $obj[$col.ColumnName] = [string]$val }
-        }
-        $rows += [pscustomobject]$obj
-      }
+      $rows = Invoke-Procedure $conn $cfg
       if ($rows.Count -eq 0) { Write-Output "[]" }
       else { $rows | ConvertTo-Json -Depth 4 -Compress }
     }

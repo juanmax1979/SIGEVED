@@ -108,7 +108,7 @@ export function CasePage() {
   const [wifiAbierta, setWifiAbierta] = useState(false);
   const [carga, setCarga] = useState<{ cargada: boolean; detalle: string }>({
     cargada: false,
-    detalle: "Se habilita cuando la evidencia esté cargada en SIGI o IURE.",
+    detalle: "Se habilita cuando la evidencia esté incorporada en SIGI o IURE.",
   });
 
   function reload() {
@@ -205,7 +205,7 @@ export function CasePage() {
             disabled={cause.provisorio || !carga.cargada}
             title={
               cause.provisorio
-                ? "Un registro provisorio no se puede eliminar hasta que tenga número de expediente definitivo y la evidencia esté cargada en SIGI o IURE."
+                ? "Un registro provisorio no se puede eliminar hasta que tenga número de expediente definitivo y la evidencia esté incorporada en SIGI o IURE."
                 : carga.detalle
             }
           >
