@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { apellidoAportante, errorAportante, expedienteYaCargado, identificadorProvisorioValido, nombreArchivoAportante, nombreCarpetaExpediente, nombrePaquete } from "@espejo/shared";
+import { apellidoAportante, aportanteCompleto, errorAportante, errorFotoAportante, expedienteYaCargado, identificadorProvisorioValido, nombreArchivoAportante, nombreCarpetaExpediente, nombrePaquete } from "@espejo/shared";
 import { escribirInformePdf } from "./informe.js";
 
 test("nombra la carpeta del paquete con el número y el año del expediente", () => {
@@ -32,18 +32,30 @@ test("nombra el zip con expediente, año, nombre y apellido, y EV", () => {
     nombrePaquete({ expediente: "18326/2017-1", aportante: { nombre: "PEREZ MARIA LAURA" } }),
     "18326-2017-PEREZ-MARIA-LAURA-EV",
   );
+  assert.equal(
+    nombrePaquete({ expediente: "18326/2017-1", aportante: { nombre: "PEREZ MARIA LAURA", anonimo: true } }),
+    "18326-2017-EV",
+  );
   assert.equal(nombrePaquete({ expediente: "", identificador: "Causa A", aportante: { nombre: "" } }), "Causa-A-EV");
 });
 
 test("pide nombres, DNI y carácter del aportante", () => {
-  assert.equal(errorAportante({ nombre: "Maria", dni: "30111222", caracter: "testimonial", caracterDetalle: "" }), "Escribí nombres y apellidos completos.");
-  assert.equal(errorAportante({ nombre: "Maria Perez", dni: "123", caracter: "testimonial", caracterDetalle: "" }), "El DNI tiene que tener 7 u 8 números.");
+  assert.equal(errorAportante({ nombre: "Maria", dni: "30111222", caracter: "aportante_testigo", caracterDetalle: "" }), "Escribí nombres y apellidos completos.");
+  assert.equal(errorAportante({ nombre: "Maria Perez", dni: "123", caracter: "aportante_testigo", caracterDetalle: "" }), "El DNI tiene que tener 7 u 8 números.");
   assert.equal(
     errorAportante({ nombre: "Maria Perez", dni: "30111222", caracter: "victima", caracterDetalle: "" } as unknown as Parameters<typeof errorAportante>[0]),
     "Elegí el carácter de la persona aportante.",
   );
-  assert.equal(errorAportante({ nombre: "Maria Perez", dni: "30111222", caracter: "testimonial", caracterDetalle: "" }), "");
-  assert.equal(errorAportante({ nombre: "Maria Perez", dni: "30111222", caracter: "declaracion_imputado", caracterDetalle: "" }), "");
+  assert.equal(errorAportante({ nombre: "", dni: "", caracter: "", caracterDetalle: "", anonimo: true }), "");
+  assert.equal(errorAportante({ nombre: "Maria Perez", dni: "30111222", caracter: "aportante_testigo", caracterDetalle: "" }), "");
+  assert.equal(errorAportante({ nombre: "Maria Perez", dni: "30111222", caracter: "aportante_imputado", caracterDetalle: "" }), "");
+  assert.equal(errorFotoAportante({ nombre: "Maria Perez", dni: "30111222", caracter: "aportante_testigo", sinFotoDni: true, motivoSinFoto: "robo" }), "");
+  assert.equal(
+    errorFotoAportante({ nombre: "Maria Perez", dni: "30111222", caracter: "aportante_testigo", sinFotoDni: true, motivoSinFoto: "1234" }),
+    "Escribí el motivo por el que no se adjunta la foto del DNI.",
+  );
+  assert.equal(aportanteCompleto({ nombre: "Maria Perez", dni: "30111222", caracter: "aportante_testigo", sinFotoDni: true, motivoSinFoto: "incendio" }), true);
+  assert.equal(aportanteCompleto({ nombre: "Maria Perez", dni: "30111222", caracter: "aportante_testigo" }), false);
 });
 
 test("arma un informe PDF institucional con la huella del paquete", async () => {
@@ -64,9 +76,12 @@ test("arma un informe PDF institucional con la huella del paquete", async () => 
       aportante: {
         nombre: "PEREZ MARIA LAURA",
         dni: "30111222",
-        caracter: "testimonial",
+        caracter: "aportante_testigo",
         caracterDetalle: "",
         dniFoto: false,
+        anonimo: false,
+        sinFotoDni: true,
+        motivoSinFoto: "El documento se perdió.",
       },
       createdAt: "2026-10-09T10:00:00.000Z",
       updatedAt: "2026-10-09T10:00:00.000Z",
@@ -96,8 +111,10 @@ test("arma un informe PDF institucional con la huella del paquete", async () => 
   assert.equal((text.match(/\/Type \/Page\b/g) ?? []).length, 1);
   assert.match(text, /Poder Judicial del Chaco/);
   assert.match(visible, /PEREZ MARIA LAURA/);
+  assert.match(`${visible}\n${text}`, /Motivo consignado por el operador/);
+  assert.match(`${visible}\n${text}`, /El documento se perd/);
   assert.match(visible, /30\.111\.222/);
-  assert.match(`${visible}\n${text}`, /Testimonial/);
+  assert.match(`${visible}\n${text}`, /Aportante-testigo/);
   assert.match(text, /333536393338303335363433383039/);
   assert.match(text, new RegExp(Buffer.from(sha256).toString("hex")));
 });

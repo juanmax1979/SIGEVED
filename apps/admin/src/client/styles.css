@@ -74,6 +74,7 @@ h2 { font-size: 22px; }
 .lede { margin: 8px 0 0; color: var(--muted); max-width: 680px; line-height: 1.5; }
 
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.captura-breve { flex: 0 1 260px; max-width: 260px; }
 .grid { display: grid; gap: 16px; }
 .cards { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 
@@ -178,6 +179,11 @@ h2 { font-size: 22px; }
 .btn:disabled, .btn-ghost:disabled, .btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }
 
 label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+label.check { display: flex; align-items: center; gap: 8px; width: 100%; }
+label.check input { width: 16px; height: 16px; flex: none; padding: 0; }
+label.check span { flex: 1; min-width: 0; line-height: 1.35; }
+.sin-foto { display: grid; gap: 16px; margin-top: 18px; width: 100%; }
+.motivo-foto textarea { min-height: 48px; height: 48px; padding: 8px 12px; }
 input, select, textarea {
   width: 100%;
   border: 1px solid #d5e0ec;

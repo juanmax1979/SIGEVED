@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  errorAportante,
+  aportanteCompleto,
   formatBytes,
-  labelCategory,
+  descripcionCaptura,
   nombrePaquete,
   type CaseRecord,
   type EvidenceRecord,
   type PairingSession,
 } from "@espejo/shared";
 import { api } from "../api";
-import { AportantePanel } from "./AportantePanel";
+import { AportantePanel, DocumentosAportante } from "./AportantePanel";
 import { UsbPanel } from "./UsbPanel";
 
 function RegistroDefinitivoPanel({ cause, onSaved }: { cause: CaseRecord; onSaved: (cause: CaseRecord) => void }) {
@@ -118,7 +118,7 @@ export function CasePage() {
         setEvidence(data.evidence);
         setSessions(data.sessions);
         if (data.carga) setCarga(data.carga);
-        if (errorAportante(data.cause.aportante) || !data.cause.aportante.dniFoto) setEditingAportante(true);
+        if (!aportanteCompleto(data.cause.aportante)) setEditingAportante(true);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "No se pudo abrir la causa."));
   }
@@ -307,10 +307,9 @@ export function CasePage() {
             <div>
               <a href={`/api/cases/${id}/package/zip`}>Descargar zip</a>
               {" · "}
-              <a href={`/api/cases/${id}/package/acta`}>Descargar acta (Word)</a>
-              {" · "}
               <a href={`/api/cases/${id}/package/informe`}>Descargar informe PDF</a>
             </div>
+            <DocumentosAportante cause={cause} />
           </div>
         ) : null}
         {evidence.length === 0 ? (
@@ -337,9 +336,9 @@ export function CasePage() {
                       {formatBytes(item.size)} · {new Date(item.receivedAt).toLocaleString()}
                       {item.source === "pantalla" ? " · pantalla por USB" : item.source === "dispositivo" ? " · archivo del teléfono" : ""}
                     </div>
-                    {item.note ? <div className="meta">{item.note}</div> : null}
+                    {item.note.trim() && descripcionCaptura(item) !== item.note.trim() ? <div className="meta">{item.note}</div> : null}
                   </td>
-                  <td>{labelCategory(item.category)}</td>
+                  <td>{descripcionCaptura(item)}</td>
                   <td>
                     <div className="hash">{item.sha256}</div>
                     <div className={item.sha256Verified ? "ok" : "warn"}>

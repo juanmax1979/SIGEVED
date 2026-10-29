@@ -18,8 +18,7 @@ import {
   dispositivoVacio,
   textoDispositivo,
   formatoDni,
-  labelCaracter,
-  labelCategory,
+  descripcionCaptura,
   type CaseRecord,
   type DispositivoDetectado,
   type EvidenceRecord,
@@ -51,6 +50,7 @@ export type ActaData = {
   sessions: PairingSession[];
   dispositivos?: DispositivoDetectado[];
   generadoEn: string;
+  anonimo?: boolean;
 };
 
 export function fechaActa(iso: string): string {
@@ -65,7 +65,59 @@ export function fechaActa(iso: string): string {
   const day = parts.find((item) => item.type === "day")?.value ?? "";
   const month = Number(parts.find((item) => item.type === "month")?.value ?? "1");
   const year = parts.find((item) => item.type === "year")?.value ?? "";
-  return `a los ${day} días del mes de ${MESES[month - 1] ?? ""} de ${year}`;
+  return `${day} de ${MESES[month - 1] ?? ""} de ${year}`;
+}
+
+const PUNTOS = "................................";
+const LINEA = "______________________";
+const LOCALIDAD = "Resistencia";
+const DESINSTALAR =
+  "se procederá a desinstalar las aplicaciones y componentes instalados durante la extracción, desactivar la depuración USB y las opciones de desarrollador que hubieran sido habilitadas";
+const ARTICULOS = "artículos 133, 134 y 229 a 240 del Código Procesal Penal de la Provincia del Chaco, Ley 965-N";
+
+function horaActa(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return PUNTOS;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const hour = parts.find((item) => item.type === "hour")?.value ?? "";
+  const minute = parts.find((item) => item.type === "minute")?.value ?? "";
+  return hour && minute ? `${hour}:${minute}` : PUNTOS;
+}
+
+function autoridadActa(cause: CaseRecord): string {
+  return cause.oficina.trim() || cause.dependencia.trim() || PUNTOS;
+}
+
+function fraseArchivos(cantidad: number): string {
+  if (cantidad <= 0) return "sin que en esta diligencia se obtuvieran archivos digitales";
+  if (cantidad === 1) {
+    return "procediéndose a la extracción de 1 archivo digital, cuyo valor hash SHA-256 fue registrado para garantizar la verificación de su integridad";
+  }
+  return `procediéndose a la extracción de ${cantidad} archivos digitales, cuyos valores hash SHA-256 fueron registrados para garantizar la verificación de su integridad`;
+}
+
+export function relatoActa(data: ActaData): string[] {
+  const lista = dispositivosActa(data);
+  const varios = (data.dispositivos ?? data.cause.dispositivos ?? []).filter(dispositivoUtil).length > 1;
+  const equipos = lista.map(textoDispositivo).join("; ");
+  const equipo = varios ? `de los dispositivos móviles ${equipos}` : `del dispositivo móvil ${equipos}`;
+  const participio = varios ? "aportados" : "aportado";
+  const aportante = data.cause.aportante;
+  const persona = actaAnonimizada(data)
+    ? "una persona aportante"
+    : `el/la Sr./Sra. ${aportante?.nombre?.trim() || PUNTOS}, DNI N.º ${aportante?.dni ? formatoDni(aportante.dni) : PUNTOS}`;
+  return [
+    `En la ciudad de ${LOCALIDAD}, siendo las ${horaActa(data.generadoEn)}, ante funcionario actuante, se deja constancia de que se procedió a realizar la extracción de evidencia digital ${equipo}, ${participio} voluntariamente por ${persona}, conforme al consentimiento informado oportunamente prestado.`,
+    `A tal efecto, mediante la herramienta SIGEVED, se realizaron las operaciones técnicas necesarias, incluyendo, según correspondió, la habilitación de opciones de desarrollador, depuración USB e instalación de componentes auxiliares, ${fraseArchivos(data.evidence.length)}.`,
+    `Concluido el procedimiento, ${DESINSTALAR}, procurando restituir el dispositivo a su configuración original, sin afectar la información personal almacenada.`,
+    `La presente diligencia se documenta conforme a las disposiciones pertinentes de los ${ARTICULOS}, en cuanto resulten aplicables.`,
+    "No siendo para más, se da por finalizado el acto, previa lectura, firmando los intervinientes para constancia.",
+  ];
 }
 
 function dispositivosActa(data: ActaData): DispositivoDetectado[] {
@@ -73,28 +125,45 @@ function dispositivosActa(data: ActaData): DispositivoDetectado[] {
   return lista.length > 0 ? lista : [dispositivoVacio()];
 }
 
-export function cuerpoActa(data: ActaData): string {
-  const aportante = data.cause.aportante;
-  const caracter = aportante?.caracter ? labelCaracter(aportante.caracter, aportante.caracterDetalle) : "sin carácter consignado";
-  const quien = aportante?.nombre || "la persona aportante";
-  const dni = aportante?.dni ? `, DNI ${formatoDni(aportante.dni)}` : "";
-  const identificado = dispositivosActa(data).map(textoDispositivo).join("; ");
-  const expediente = data.cause.expediente || "s/n";
-  const caratula = data.cause.caratula || "s/ carátula";
-  return `En la ciudad de Resistencia, capital de la provincia del Chaco, ${fechaActa(data.generadoEn)}, en los autos caratulados: "${caratula}", Expte. Nº ${expediente}, se hace presente ${quien}${dni}, en carácter de ${caracter}, quien entrega voluntariamente el dispositivo ${identificado}. Se le hace saber que el mismo será manipulado solo a los efectos de extraer la evidencia digital que consta en el mismo, para facilitar su extracción se instalará una aplicación móvil la cual solo se utilizará a esos efectos, y que finalizado el acto se procederá a su desinstalación del mismo. Luego el dispositivo es devuelto a la persona aportante. No siendo para más, finaliza el acto, previa íntegra lectura efectuada a viva voz por el actuario, firma el compareciente al pie de conformidad, todo ante mí que doy fe.`;
+function actaAnonimizada(data: ActaData): boolean {
+  return data.anonimo ?? Boolean(data.cause.aportante?.anonimo);
+}
+
+export function constanciaSinFoto(aportante: { sinFotoDni?: boolean; dniFoto?: boolean; motivoSinFoto?: string } | undefined, anonimo: boolean): string {
+  if (anonimo || !aportante?.sinFotoDni || aportante.dniFoto) return "";
+  const motivo = (aportante.motivoSinFoto ?? "").trim();
+  if (!motivo) return "";
+  const cierre = /[.!?]$/.test(motivo) ? "" : ".";
+  return `No se adjunta fotografía del documento nacional de identidad. Motivo consignado por el operador: ${motivo}${cierre}`;
 }
 
 export function textoActa(data: ActaData): string {
-  const expediente = data.cause.expediente || "s/n";
-  const lines = [`Expte. Nº ${expediente}`, "", cuerpoActa(data), ""];
+  const cause = data.cause;
+  const lines = [
+    "PODER JUDICIAL DE LA PROVINCIA DEL CHACO",
+    "ACTA DE EXTRACCIÓN DE EVIDENCIA DIGITAL",
+    `Expediente N.º: ${cause.expediente || PUNTOS}`,
+    `Carátula: ${cause.caratula || PUNTOS}`,
+    `Fiscalía / Dependencia: ${autoridadActa(cause)}`,
+    `Lugar y fecha: ${LOCALIDAD}, ${fechaActa(data.generadoEn)}`,
+    "",
+    ...relatoActa(data),
+    "",
+  ];
+  const sinFoto = constanciaSinFoto(cause.aportante, actaAnonimizada(data));
+  if (sinFoto) lines.push(sinFoto, "");
+  lines.push(
+    `Hora de finalización: ${PUNTOS}`,
+    `Firma del funcionario actuante: ${LINEA}`,
+    `Firma del responsable técnico: ${LINEA}`,
+    `Firma del testigo/aportante: ${LINEA}`,
+  );
   if (data.evidence.length > 0) {
-    lines.push("Archivos extraídos", "");
+    lines.push("", "Archivos extraídos", "");
     data.evidence.forEach((item, index) => {
-      lines.push(`${index + 1}. ${item.filename} · ${labelCategory(item.category)} · ${item.sha256}`);
+      lines.push(`${index + 1}. ${item.filename} · ${descripcionCaptura(item)} · ${item.sha256}`);
     });
-    lines.push("");
   }
-  lines.push("Firma del compareciente: ________________________________", "", "Ante mí: ________________________________");
   return lines.join("\n");
 }
 
@@ -138,12 +207,31 @@ function tipoFoto(buffer: Buffer): "jpg" | "png" | undefined {
   return undefined;
 }
 
-function parrafo(texto: string, opciones?: { justify?: boolean; before?: number; bold?: boolean; pageBreak?: boolean }): Paragraph {
+function parrafo(texto: string, opciones?: { justify?: boolean; before?: number; bold?: boolean; pageBreak?: boolean; center?: boolean }): Paragraph {
+  const alignment = opciones?.center ? AlignmentType.CENTER : opciones?.justify ? AlignmentType.JUSTIFIED : AlignmentType.LEFT;
   return new Paragraph({
-    alignment: opciones?.justify ? AlignmentType.JUSTIFIED : AlignmentType.LEFT,
+    alignment,
     pageBreakBefore: opciones?.pageBreak,
     spacing: { before: opciones?.before ?? 0, after: 160, line: 276 },
     children: [new TextRun({ text: texto, font: "Arial", size: 24, bold: opciones?.bold })],
+  });
+}
+
+function campo(etiqueta: string, valor: string): Paragraph {
+  return new Paragraph({
+    spacing: { before: 80, after: 80, line: 276 },
+    children: [
+      new TextRun({ text: etiqueta, font: "Arial", size: 24, bold: true }),
+      new TextRun({ text: valor, font: "Arial", size: 24 }),
+    ],
+  });
+}
+
+function parrafoMixto(partes: { texto: string; bold?: boolean }[], before = 160): Paragraph {
+  return new Paragraph({
+    alignment: AlignmentType.JUSTIFIED,
+    spacing: { before, after: 160, line: 276 },
+    children: partes.map((parte) => new TextRun({ text: parte.texto, font: "Arial", size: 24, bold: parte.bold })),
   });
 }
 
@@ -197,25 +285,48 @@ export function fotoEncuadrada(
 }
 
 export async function docxActa(data: ActaData, foto?: Buffer): Promise<Buffer> {
-  const expediente = data.cause.expediente || "s/n";
+  const cause = data.cause;
+  const expediente = cause.expediente || PUNTOS;
+  const relato = relatoActa(data);
   const children: FileChild[] = [
-    parrafo(`Expte. Nº ${expediente}`),
-    parrafo(cuerpoActa(data), { justify: true, before: 200 }),
+    parrafo("PODER JUDICIAL DE LA PROVINCIA DEL CHACO", { bold: true, center: true }),
+    parrafo("ACTA DE EXTRACCIÓN DE EVIDENCIA DIGITAL", { bold: true, before: 200 }),
+    campo("Expediente N.º:", ` ${expediente}`),
+    campo("Carátula:", ` ${cause.caratula || PUNTOS}`),
+    campo("Fiscalía / Dependencia:", ` ${autoridadActa(cause)}`),
+    campo("Lugar y fecha:", ` ${LOCALIDAD}, ${fechaActa(data.generadoEn)}`),
+    parrafo(relato[0] ?? "", { justify: true, before: 200 }),
+    parrafo(relato[1] ?? "", { justify: true }),
+    parrafoMixto([
+      { texto: "Concluido el procedimiento, " },
+      { texto: DESINSTALAR, bold: true },
+      { texto: ", procurando restituir el dispositivo a su configuración original, sin afectar la información personal almacenada." },
+    ]),
+    parrafoMixto([
+      { texto: "La presente diligencia se documenta conforme a las disposiciones pertinentes de los " },
+      { texto: ARTICULOS, bold: true },
+      { texto: ", en cuanto resulten aplicables." },
+    ]),
+    parrafo(relato[4] ?? "", { justify: true }),
   ];
-  if (foto) children.push(...fotoEncuadrada(foto));
+  const sinFoto = constanciaSinFoto(cause.aportante, actaAnonimizada(data));
+  if (foto && !actaAnonimizada(data)) children.push(...fotoEncuadrada(foto));
+  else if (sinFoto) children.push(parrafo(sinFoto, { justify: true, before: 200 }));
   children.push(
-    parrafo("Firma del compareciente: ________________________________", { before: 480 }),
-    parrafo("Ante mí: ________________________________", { before: 600 }),
+    campo("Hora de finalización:", ` ${PUNTOS}`),
+    campo("Firma del funcionario actuante:", ` ${LINEA}`),
+    campo("Firma del responsable técnico:", ` ${LINEA}`),
+    campo("Firma del testigo/aportante:", ` ${LINEA}`),
   );
   if (data.evidence.length > 0) {
     children.push(parrafo("Archivos extraídos", { bold: true, pageBreak: true }));
     data.evidence.forEach((item, index) => {
       children.push(parrafo(`${index + 1}. ${item.filename}`));
-      children.push(parrafo(`${labelCategory(item.category)} · ${item.sha256}`));
+      children.push(parrafo(`${descripcionCaptura(item)} · ${item.sha256}`));
     });
   }
   const document = new Document({
-    title: `Acta de extracción — ${expediente}`,
+    title: `Acta de extracción de evidencia digital — ${expediente}`,
     creator: "Poder Judicial del Chaco",
     description: data.cause.caratula,
     sections: [
@@ -235,6 +346,6 @@ export async function docxActa(data: ActaData, foto?: Buffer): Promise<Buffer> {
 
 export async function materialActa(data: ActaData): Promise<{ texto: string; docx: Buffer }> {
   const fotoPath = rutaFotoDni(data.cause.id);
-  const foto = fotoPath && existsSync(fotoPath) ? readFileSync(fotoPath) : undefined;
+  const foto = !actaAnonimizada(data) && fotoPath && existsSync(fotoPath) ? readFileSync(fotoPath) : undefined;
   return { texto: textoActa(data), docx: await docxActa(data, foto) };
 }

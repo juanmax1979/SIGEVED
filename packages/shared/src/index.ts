@@ -20,8 +20,9 @@ export const EVIDENCE_CATEGORIES = [
 export type EvidenceCategory = (typeof EVIDENCE_CATEGORIES)[number]["id"];
 
 export const CARACTERES_APORTANTE = [
-  { id: "testimonial", label: "Testimonial" },
-  { id: "declaracion_imputado", label: "Declaración de imputado" },
+  { id: "aportante_testigo", label: "Aportante-testigo" },
+  { id: "aportante_imputado", label: "Aportante-imputado" },
+  { id: "aportante_menor", label: "Aportante-menor" },
 ] as const;
 
 export type CaracterAportante = (typeof CARACTERES_APORTANTE)[number]["id"];
@@ -32,6 +33,9 @@ export type Aportante = {
   caracter: CaracterAportante | "";
   caracterDetalle: string;
   dniFoto: boolean;
+  anonimo: boolean;
+  sinFotoDni: boolean;
+  motivoSinFoto: string;
 };
 
 export type DispositivoDetectado = {
@@ -42,7 +46,7 @@ export type DispositivoDetectado = {
 };
 
 export function aportanteVacio(): Aportante {
-  return { nombre: "", dni: "", caracter: "", caracterDetalle: "", dniFoto: false };
+  return { nombre: "", dni: "", caracter: "", caracterDetalle: "", dniFoto: false, anonimo: false, sinFotoDni: false, motivoSinFoto: "" };
 }
 
 export function labelCaracter(caracter: string, _detalle = ""): string {
@@ -103,11 +107,11 @@ export function nombreArchivoAportante(nombre: string): string {
     .slice(0, 80);
 }
 
-export function nombrePaquete(cause: { expediente: string; identificador?: string; aportante?: { nombre?: string } | null }): string {
+export function nombrePaquete(cause: { expediente: string; identificador?: string; aportante?: { nombre?: string; anonimo?: boolean } | null }): string {
   const expediente = cause.expediente.trim();
   const match = expediente.match(/^(\d+)\s*[/\\]\s*(\d{4})/);
   const base = match ? `${match[1]}-${match[2]}` : nombreCarpetaExpediente(cause.identificador || expediente);
-  const persona = nombreArchivoAportante(cause.aportante?.nombre ?? "");
+  const persona = cause.aportante?.anonimo ? "" : nombreArchivoAportante(cause.aportante?.nombre ?? "");
   return [base, persona, "EV"].filter(Boolean).join("-");
 }
 
@@ -116,23 +120,53 @@ export function formatoDni(dni: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-export function normalizarAportante(value: Partial<Aportante> | null | undefined): Aportante {
+export function normalizarAportante(
+  value: (Partial<Omit<Aportante, "anonimo" | "sinFotoDni">> & { anonimo?: boolean | string; sinFotoDni?: boolean | string }) | null | undefined,
+): Aportante {
   const caracter = CARACTERES_APORTANTE.some((item) => item.id === value?.caracter) ? (value?.caracter ?? "") : "";
+  const marca = value?.anonimo;
+  const sinFoto = value?.sinFotoDni;
   return {
     nombre: String(value?.nombre ?? "").trim().replace(/\s+/g, " "),
     dni: String(value?.dni ?? "").replace(/\D/g, ""),
     caracter,
     caracterDetalle: "",
     dniFoto: value?.dniFoto === true,
+    anonimo: marca === true || marca === "1" || marca === "true",
+    sinFotoDni: sinFoto === true || sinFoto === "1" || sinFoto === "true",
+    motivoSinFoto: String(value?.motivoSinFoto ?? "").trim().replace(/\s+/g, " ").slice(0, 400),
   };
+}
+
+export function motivoSinFotoValido(texto: string): boolean {
+  const limpio = texto.trim().replace(/\s+/g, " ");
+  return limpio.length >= 4 && limpio.length <= 400 && /\p{L}/u.test(limpio);
+}
+
+export function errorFotoAportante(value: Partial<Aportante> | null | undefined): string {
+  const aportante = normalizarAportante(value);
+  if (aportante.anonimo || aportante.dniFoto) return "";
+  if (!aportante.sinFotoDni || !motivoSinFotoValido(aportante.motivoSinFoto)) {
+    return aportante.sinFotoDni
+      ? "Escribí el motivo por el que no se adjunta la foto del DNI."
+      : "Sacá o subí una foto del DNI del aportante.";
+  }
+  return "";
 }
 
 export function errorAportante(value: Partial<Aportante> | null | undefined): string {
   const aportante = normalizarAportante(value);
+  if (aportante.anonimo) return "";
   if (aportante.nombre.split(" ").filter(Boolean).length < 2) return "Escribí nombres y apellidos completos.";
   if (!/^\d{7,8}$/.test(aportante.dni)) return "El DNI tiene que tener 7 u 8 números.";
   if (!aportante.caracter) return "Elegí el carácter de la persona aportante.";
   return "";
+}
+
+export function aportanteCompleto(value: Partial<Aportante> | null | undefined): boolean {
+  const aportante = normalizarAportante(value);
+  if (aportante.anonimo) return true;
+  return !errorAportante({ ...aportante, anonimo: false }) && !errorFotoAportante({ ...aportante, anonimo: false });
 }
 
 export type CaseRecord = {
@@ -287,6 +321,12 @@ export function labelCaseType(tipo: CaseType): string {
 
 export function labelCategory(category: EvidenceCategory): string {
   return EVIDENCE_CATEGORIES.find((item) => item.id === category)?.label ?? category;
+}
+
+export function descripcionCaptura(item: { category: EvidenceCategory; note?: string; source?: string }): string {
+  const nota = item.note?.trim() ?? "";
+  if ((item.source === "pantalla" || item.source === "dispositivo") && nota) return nota;
+  return labelCategory(item.category);
 }
 
 export const FINGERPRINT_PATHS = [

@@ -10,9 +10,12 @@ import {
   CASE_TYPES,
   EVIDENCE_CATEGORIES,
   PROTOCOL_VERSION,
+  aportanteVacio,
   causaDeOficina,
   errorAportante,
-  labelCategory,
+  errorFotoAportante,
+  motivoSinFotoValido,
+  descripcionCaptura,
   mismaDependencia,
   dispositivoUtil,
   incorporarDispositivo,
@@ -33,7 +36,7 @@ import {
 import { z } from "zod";
 import { materialActa } from "./acta.js";
 import { materialConsentimiento } from "./consentimiento.js";
-import { guardarFotoDni, rutaFotoDni } from "./dni-foto.js";
+import { borrarFotoDni, guardarFotoDni, rutaFotoDni } from "./dni-foto.js";
 import { sha256File } from "./hash.js";
 import { escribirInformePdf } from "./informe.js";
 import { isLoopback, listLanHosts } from "./network.js";
@@ -74,6 +77,7 @@ import {
 } from "./store.js";
 
 const PORT = Number(process.env.PORT ?? 4780);
+const SIN_DEPENDENCIAS = "El usuario no posee dependencias habilitadas en los Sistemas de Gestión de Expedientes Digitales";
 const uploadDir = path.join(dataDir, "tmp");
 ensureDataDirs();
 mkdirSync(uploadDir, { recursive: true });
@@ -87,6 +91,11 @@ const caseType = z.enum(CASE_TYPES.map((item) => item.id) as [CaseType, ...CaseT
 const category = z.enum(
   EVIDENCE_CATEGORIES.map((item) => item.id) as [EvidenceCategory, ...EvidenceCategory[]],
 );
+
+function notaDeCaptura(descripcion: string, nota: string, defecto: string): string {
+  const texto = [descripcion.trim(), nota.trim()].filter((item) => item.length > 0).join(". ");
+  return texto || defecto;
+}
 const datosDispositivo = {
   marca: z.string().max(80).default(""),
   modelo: z.string().max(80).default(""),
@@ -96,6 +105,10 @@ const datosDispositivo = {
 
 function caseIdDe(value: string | string[]): string {
   return Array.isArray(value) ? (value[0] ?? "") : value;
+}
+
+function faltaDatosAportante(aportante: CaseRecord["aportante"]): string {
+  return errorAportante({ ...aportante, anonimo: false }) || errorFotoAportante({ ...aportante, anonimo: false });
 }
 
 async function operadorHabilitado(): Promise<
@@ -367,8 +380,13 @@ app.get("/api/sigi/me", async (req, res) => {
     } catch (error) {
       sigiError = error instanceof Error ? error.message : "No se pudo consultar SIGI.";
     }
-  } else if (iure.dependencias.length === 0) {
-    res.json({ ...empty, configured: false, needsDni: false, error: iure.error || mensajeSinSigi() });
+    } else if (iure.dependencias.length === 0) {
+    res.status(502).json({
+      ...empty,
+      configured: Boolean(iureConfig()),
+      needsDni: false,
+      error: iure.error || (iureConfig() ? SIN_DEPENDENCIAS : mensajeSinSigi()),
+    });
     return;
   }
   const dependencias = [...sigiUser.dependencias, ...iure.dependencias];
@@ -393,8 +411,9 @@ app.get("/api/sigi/me", async (req, res) => {
   } else if (needsDni && dni && (sigiUser.nombre || sigiUser.dependencias.length > 0) && getVinculo(username) !== dni) {
     await setVinculo(username, dni);
   }
-  const avisos = [dependencias.length === 0 && sigiConfig() && !sigiError ? "Este usuario no tiene dependencias habilitadas en SIGI." : "", sigiError, iure.error].filter(Boolean);
-  res.status(dependencias.length === 0 && avisos.length > 0 ? 502 : 200).json({
+  const fallo = [sigiError, iure.error].filter(Boolean).join(" ");
+  const avisos = dependencias.length === 0 ? [fallo || SIN_DEPENDENCIAS] : [fallo].filter(Boolean);
+  res.status(dependencias.length === 0 ? 502 : 200).json({
     ...empty,
     configured: true,
     needsDni,
@@ -405,7 +424,7 @@ app.get("/api/sigi/me", async (req, res) => {
     dependencias,
     oficinaId: office?.id ?? "",
     oficinaNombre: office ? etiquetaDependencia(office) : "",
-    error: dependencias.length === 0 ? avisos.join(" ") || "Este usuario no tiene dependencias habilitadas." : avisos.join(" "),
+    error: avisos.join(" "),
   });
 });
 
@@ -665,7 +684,8 @@ app.get("/api/cases/:id/aportante/dni", (req, res) => {
 
 app.put("/api/cases/:id/aportante", upload.single("foto"), async (req, res) => {
   const caseId = Array.isArray(req.params.id) ? (req.params.id[0] ?? "") : req.params.id;
-  const error = errorAportante(req.body);
+  const aportante = normalizarAportante(req.body);
+  const error = errorAportante(aportante);
   const temp = req.file?.path;
   if (error) {
     if (temp && existsSync(temp)) unlinkSync(temp);
@@ -677,19 +697,32 @@ app.put("/api/cases/:id/aportante", upload.single("foto"), async (req, res) => {
     res.status(404).json({ error: "No encontramos esa causa." });
     return;
   }
+  const pideSinFoto = !aportante.anonimo && aportante.sinFotoDni;
+  const motivo = pideSinFoto ? aportante.motivoSinFoto : "";
   try {
-    if (temp) {
+    if (pideSinFoto) {
+      if (!motivoSinFotoValido(motivo)) {
+        res.status(400).json({ error: "Escribí el motivo por el que no se adjunta la foto del DNI." });
+        return;
+      }
+      borrarFotoDni(caseId);
+    } else if (temp) {
       const mensaje = await guardarFotoDni(caseId, temp, String(req.body.dni ?? ""));
       if (mensaje) {
         res.status(400).json({ error: mensaje });
         return;
       }
-    } else if (!rutaFotoDni(caseId)) {
+    } else if (!aportante.anonimo && !rutaFotoDni(caseId)) {
       res.status(400).json({ error: "Sacá o subí una foto del DNI del aportante." });
       return;
     }
     const cause = await updateCase(caseId, {
-      aportante: { ...normalizarAportante(req.body), dniFoto: true },
+      aportante: {
+        ...aportante,
+        dniFoto: pideSinFoto ? false : Boolean(temp || rutaFotoDni(caseId)),
+        sinFotoDni: pideSinFoto,
+        motivoSinFoto: motivo,
+      },
     });
     if (!cause) {
       res.status(404).json({ error: "No encontramos esa causa." });
@@ -920,6 +953,7 @@ app.post("/api/cases/:id/usb/capture", async (req, res) => {
       .object({
         serial: z.string(),
         category: category.default("otro"),
+        descripcion: z.string().max(80).default(""),
         note: z.string().max(2000).default(""),
         deviceName: z.string().max(160).default(""),
         ...datosDispositivo,
@@ -934,7 +968,7 @@ app.post("/api/cases/:id/usb/capture", async (req, res) => {
       sha256: createHash("sha256").update(png).digest("hex"),
       size: png.length,
       category: body.category,
-      note: body.note || "Captura de la pantalla del teléfono, tomada desde esta estación.",
+      note: notaDeCaptura(body.descripcion, body.note, "Captura de la pantalla del teléfono, tomada desde esta estación."),
       deviceId: body.serial,
       deviceName: body.deviceName || body.serial,
       tempPath: temp,
@@ -959,6 +993,7 @@ app.post("/api/cases/:id/usb/record", async (req, res) => {
         serial: z.string(),
         seconds: z.number().int().min(5).max(180).default(30),
         category: category.default("otro"),
+        descripcion: z.string().max(80).default(""),
         note: z.string().max(2000).default(""),
         deviceName: z.string().max(160).default(""),
         ...datosDispositivo,
@@ -972,7 +1007,7 @@ app.post("/api/cases/:id/usb/record", async (req, res) => {
       sha256: await sha256File(temp),
       size: statSync(temp).size,
       category: body.category,
-      note: body.note || `Grabación de ${body.seconds} segundos de la pantalla del teléfono.`,
+      note: notaDeCaptura(body.descripcion, body.note, `Grabación de ${body.seconds} segundos de la pantalla del teléfono.`),
       deviceId: body.serial,
       deviceName: body.deviceName || body.serial,
       tempPath: temp,
@@ -998,6 +1033,7 @@ app.post("/api/cases/:id/usb/import", async (req, res) => {
         tipo: z.enum(["imagen", "video"]),
         paths: z.array(z.string().min(1).max(500)).min(1).max(40),
         category: category.default("otro"),
+        descripcion: z.string().max(80).default(""),
         note: z.string().max(2000).default(""),
         deviceName: z.string().max(160).default(""),
         ...datosDispositivo,
@@ -1022,7 +1058,11 @@ app.post("/api/cases/:id/usb/import", async (req, res) => {
           sha256: await sha256File(temp),
           size: statSync(temp).size,
           category: body.category,
-          note: body.note || (body.tipo === "imagen" ? "Imagen copiada del teléfono por cable USB." : "Video copiado del teléfono por cable USB."),
+          note: notaDeCaptura(
+            body.descripcion,
+            body.note,
+            body.tipo === "imagen" ? "Imagen copiada del teléfono por cable USB." : "Video copiado del teléfono por cable USB.",
+          ),
           deviceId: body.serial,
           deviceName: body.deviceName || body.serial,
           tempPath: temp,
@@ -1055,9 +1095,9 @@ app.post("/api/cases/:id/package", async (req, res) => {
     res.status(404).json({ error: "No encontramos esa causa." });
     return;
   }
-  const faltante = errorAportante(cause.aportante);
-  if (faltante || !cause.aportante.dniFoto) {
-    res.status(400).json({ error: faltante || "Sacá o subí una foto del DNI del aportante." });
+  const faltante = faltaDatosAportante(cause.aportante);
+  if (!cause.aportante.anonimo && faltante) {
+    res.status(400).json({ error: faltante });
     return;
   }
   try {
@@ -1090,14 +1130,16 @@ app.get("/api/cases/:id/consentimiento", async (req, res) => {
     res.status(404).json({ error: "No encontramos esa causa." });
     return;
   }
-  const faltante = errorAportante(cause.aportante);
-  if (faltante || !cause.aportante.dniFoto) {
-    res.status(400).json({ error: faltante || "Sacá o subí una foto del DNI del aportante." });
+  const anonimo = req.query.variante === "anonimo";
+  const faltante = faltaDatosAportante(cause.aportante);
+  if (!anonimo && faltante) {
+    res.status(400).json({ error: faltante });
     return;
   }
   try {
-    const docx = await materialConsentimiento(cause);
-    const nombre = `consentimiento-${nombreCarpetaExpediente(cause.expediente)}.docx`;
+    const dispositivos = await resolverDispositivos(cause, bundle.sessions, bundle.evidence);
+    const docx = await materialConsentimiento(cause, new Date().toISOString(), anonimo, dispositivos, bundle.evidence);
+    const nombre = `consentimiento-${nombreCarpetaExpediente(cause.expediente)}${anonimo ? "-anonimizado" : ""}.docx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     res.setHeader("Content-Disposition", `attachment; filename="${nombre}"`);
     res.send(docx);
@@ -1106,15 +1148,35 @@ app.get("/api/cases/:id/consentimiento", async (req, res) => {
   }
 });
 
-app.get("/api/cases/:id/package/acta", (req, res) => {
-  const docxPath = packagePath(req.params.id, "acta-judicial.docx");
-  if (!existsSync(docxPath)) {
-    res.status(404).json({ error: "Todavía no hay un acta de esta causa." });
+app.get("/api/cases/:id/package/acta", async (req, res) => {
+  const bundle = caseBundle(req.params.id);
+  const cause = bundle.cause;
+  if (!cause) {
+    res.status(404).json({ error: "No encontramos esa causa." });
     return;
   }
-  const cause = caseBundle(req.params.id).cause;
-  const nombre = cause ? `acta-${nombreCarpetaExpediente(cause.expediente)}.docx` : "acta-judicial.docx";
-  res.download(docxPath, nombre);
+  const anonimo = req.query.variante === "anonimo";
+  const faltante = faltaDatosAportante(cause.aportante);
+  if (!anonimo && faltante) {
+    res.status(400).json({ error: faltante });
+    return;
+  }
+  try {
+    const acta = await materialActa({
+      cause,
+      evidence: bundle.evidence,
+      sessions: bundle.sessions,
+      dispositivos: cause.dispositivos ?? [],
+      generadoEn: new Date().toISOString(),
+      anonimo,
+    });
+    const nombre = `acta-${nombreCarpetaExpediente(cause.expediente)}${anonimo ? "-anonimizada" : ""}.docx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    res.setHeader("Content-Disposition", `attachment; filename="${nombre}"`);
+    res.send(acta.docx);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "No se pudo armar el acta." });
+  }
 });
 
 app.get("/api/cases/:id/package/informe", (req, res) => {
@@ -1342,19 +1404,20 @@ async function fillArchive(
     for (const item of dispositivos) await registrarDispositivo(cause.id, item);
     cause.dispositivos = dispositivos;
   }
+  const anonimo = Boolean(cause.aportante.anonimo);
   const carpeta = nombrePaquete(cause);
   const dentro = (name: string) => `${carpeta}/${name}`;
   const manifest = {
     sistema: "SIGEVED",
     version: PROTOCOL_VERSION,
     exportadoEn: new Date().toISOString(),
-    causa: bundle.cause,
+    causa: anonimo ? { ...bundle.cause, aportante: { ...aportanteVacio(), anonimo: true } } : bundle.cause,
     sesiones: bundle.sessions.map((session) => ({
       id: session.id,
       code: session.code,
       status: session.status,
       deviceName: session.deviceName,
-      contributorName: session.contributorName,
+      contributorName: anonimo ? "" : session.contributorName,
       imei: session.imei || "",
       connectedAt: session.connectedAt,
       createdAt: session.createdAt,
@@ -1363,7 +1426,7 @@ async function fillArchive(
       id: item.id,
       nombre: item.filename,
       tipo: item.mime,
-      categoria: labelCategory(item.category),
+      categoria: descripcionCaptura(item),
       origen:
         item.source === "pantalla"
           ? "captura de pantalla por USB"
@@ -1377,7 +1440,7 @@ async function fillArchive(
       capturadoEn: item.capturedAt,
       recibidoEn: item.receivedAt,
       dispositivo: item.deviceName,
-      aportante: item.contributorName,
+      aportante: anonimo ? "" : item.contributorName,
       nota: item.note,
       archivoEnPaquete: dentro(`archivos/${item.storedName}`),
     })),
@@ -1388,13 +1451,16 @@ async function fillArchive(
     sessions: bundle.sessions,
     dispositivos: cause.dispositivos ?? [],
     generadoEn: manifest.exportadoEn,
+    anonimo,
   });
   archive.append(JSON.stringify(manifest, null, 2), { name: dentro("manifiesto.json") });
   archive.append(acta.texto, { name: dentro("acta-judicial.txt") });
   archive.append(acta.docx, { name: dentro("acta-judicial.docx") });
-  archive.append(await materialConsentimiento(cause, manifest.exportadoEn), { name: dentro("consentimiento.docx") });
+  archive.append(await materialConsentimiento(cause, manifest.exportadoEn, anonimo, cause.dispositivos ?? [], bundle.evidence), {
+    name: dentro("consentimiento.docx"),
+  });
   const foto = rutaFotoDni(cause.id);
-  if (foto) archive.file(foto, { name: dentro(`foto-dni${path.extname(foto)}`) });
+  if (foto && !anonimo) archive.file(foto, { name: dentro(`foto-dni${path.extname(foto)}`) });
   for (const item of bundle.evidence) {
     const filePath = evidenceFilePath(item);
     if (existsSync(filePath)) archive.file(filePath, { name: dentro(`archivos/${item.storedName}`) });

@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import type { EvidenceCategory } from "@espejo/shared";
-import { EVIDENCE_CATEGORIES, formatBytes } from "@espejo/shared";
+import { formatBytes } from "@espejo/shared";
 import { api } from "../api";
 
 type Medio = { id: string; name: string; path: string; size: number; date: number };
@@ -42,7 +41,7 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
   const [status, setStatus] = useState<UsbStatus | null>(null);
   const [serial, setSerial] = useState("");
   const [seconds, setSeconds] = useState(30);
-  const [category, setCategory] = useState<EvidenceCategory>("otro");
+  const [descripcion, setDescripcion] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -111,7 +110,7 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
     try {
       const data = await api<{ evidence: unknown[]; errors: string[] }>(`/api/cases/${caseId}/usb/import`, {
         method: "POST",
-        body: JSON.stringify({ serial, tipo: tipoMedio, paths: elegidos, category, note, ...datosDispositivo }),
+        body: JSON.stringify({ serial, tipo: tipoMedio, paths: elegidos, descripcion, note, ...datosDispositivo }),
       });
       const cantidad = data.evidence.length;
       setMessage(
@@ -181,15 +180,14 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
                 <option value={120}>120</option>
               </select>
             </label>
-            <label>
+            <label className="captura-breve">
               Categoría
-              <select value={category} onChange={(event) => setCategory(event.target.value as EvidenceCategory)}>
-                {EVIDENCE_CATEGORIES.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+              <input
+                value={descripcion}
+                maxLength={80}
+                onChange={(event) => setDescripcion(event.target.value)}
+                placeholder="Qué se está capturando"
+              />
             </label>
           </div>
           {selected ? (
@@ -235,14 +233,14 @@ export function UsbPanel({ caseId, onSaved }: { caseId: string; onSaved: () => v
             <button
               className="btn"
               disabled={!ready}
-              onClick={() => run("Capturando", `/api/cases/${caseId}/usb/capture`, { serial, category, note, ...datosDispositivo })}
+              onClick={() => run("Capturando", `/api/cases/${caseId}/usb/capture`, { serial, descripcion, note, ...datosDispositivo })}
             >
               {busy === "Capturando" ? "Capturando…" : "Capturar lo que se ve"}
             </button>
             <button
               className="btn"
               disabled={!ready}
-              onClick={() => run("Grabando", `/api/cases/${caseId}/usb/record`, { serial, seconds, category, note, ...datosDispositivo })}
+              onClick={() => run("Grabando", `/api/cases/${caseId}/usb/record`, { serial, seconds, descripcion, note, ...datosDispositivo })}
             >
               {busy === "Grabando" ? `Grabando ${seconds} s…` : "Grabar pantalla"}
             </button>

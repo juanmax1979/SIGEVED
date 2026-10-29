@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { createWriteStream } from "node:fs";
 import type { Writable } from "node:stream";
-import { formatBytes, formatoDni, labelCaracter, labelCaseType, labelCategory, nombrePaquete, type CaseRecord, type EvidenceRecord, type PairingSession } from "@espejo/shared";
+import { descripcionCaptura, formatBytes, formatoDni, labelCaracter, labelCaseType, nombrePaquete, type CaseRecord, type EvidenceRecord, type PairingSession } from "@espejo/shared";
 
 const require = createRequire(import.meta.url);
 const PDFDocument = require("pdfkit") as new (options?: Record<string, unknown>) => Pdf;
@@ -87,7 +87,7 @@ export function escribirInformePdf(filePath: string, data: InformePdf): Promise<
   y = titulo(doc, y, paquete);
   y = ficha(doc, y, data);
   y = personaAportante(doc, y, data.cause);
-  y = dispositivos(doc, y, data.sessions);
+  y = dispositivos(doc, y, data.sessions, Boolean(data.cause.aportante?.anonimo));
   y = archivos(doc, y, data.evidence);
   huella(doc, y, data.sha256, paquete);
   pie(doc);
@@ -153,22 +153,26 @@ function ficha(doc: Pdf, y: number, data: InformePdf): number {
 }
 
 function personaAportante(doc: Pdf, y: number, cause: CaseRecord): number {
+  if (cause.aportante?.anonimo) return bloque(doc, y, "Persona aportante", [["Identificación", "Aportante anónimo o de identidad reservada"]]);
   const aportante = cause.aportante;
   const filas: [string, string][] = [
     ["Nombres y apellidos", aportante?.nombre || "—"],
     ["DNI", aportante?.dni ? formatoDni(aportante.dni) : "—"],
     ["Carácter", aportante?.caracter ? labelCaracter(aportante.caracter, aportante.caracterDetalle) : "—"],
   ];
+  if (aportante?.sinFotoDni && !aportante.dniFoto && aportante.motivoSinFoto) {
+    filas.push(["Foto del DNI", `No se adjunta. Motivo consignado por el operador: ${aportante.motivoSinFoto}`]);
+  }
   return bloque(doc, y, "Persona aportante", filas);
 }
 
-function dispositivos(doc: Pdf, y: number, sessions: PairingSession[]): number {
+function dispositivos(doc: Pdf, y: number, sessions: PairingSession[], anonimo: boolean): number {
   const vistos = sessions.filter((item) => item.deviceName || item.imei);
   if (vistos.length === 0) return y;
   const filas: [string, string][] = [];
   vistos.forEach((item, index) => {
     const nombre = item.deviceName || "Teléfono";
-    const aportante = item.contributorName ? ` · ${item.contributorName}` : "";
+    const aportante = !anonimo && item.contributorName ? ` · ${item.contributorName}` : "";
     filas.push([`Dispositivo ${index + 1}`, `${nombre}${aportante}`]);
     filas.push(["IMEI", item.imei || "No disponible"]);
   });
@@ -207,7 +211,7 @@ function archivos(doc: Pdf, y: number, evidence: EvidenceRecord[]): number {
     doc.restore();
     doc.fillColor(ink).font("Helvetica-Bold").fontSize(11).text(`${index + 1}. ${item.filename}`, left + 12, y + 8, { width: width - 24 });
     doc.fillColor(muted).font("Helvetica").fontSize(8).text(
-      `${labelCategory(item.category)} · ${origen(item)} · ${formatBytes(item.size)} · ${fecha(item.capturedAt)}`,
+      `${descripcionCaptura(item)} · ${origen(item)} · ${formatBytes(item.size)} · ${fecha(item.capturedAt)}`,
       left + 12,
       doc.y + 2,
       { width: width - 24 },

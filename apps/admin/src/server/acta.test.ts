@@ -20,9 +20,12 @@ const data = {
     aportante: {
       nombre: "PEREZ MARIA LAURA",
       dni: "30111222",
-      caracter: "declaracion_imputado" as const,
+      caracter: "aportante_imputado" as const,
       caracterDetalle: "",
       dniFoto: false,
+      anonimo: false,
+      sinFotoDni: false,
+      motivoSinFoto: "",
     },
     createdAt: "2026-10-19T13:00:00.000Z",
     updatedAt: "2026-10-19T13:00:00.000Z",
@@ -53,18 +56,47 @@ const data = {
   generadoEn: "2026-10-19T16:00:00.000Z",
 };
 
-test("el acta sigue el modelo de extracción y deja constancia de la app", () => {
+test("el acta sigue el modelo de extracción y deja constancia de la herramienta", () => {
   const texto = textoActa(data);
-  assert.match(texto, /Expte\. Nº 12345\/2026-1/);
-  assert.match(texto, /En la ciudad de Resistencia, capital de la provincia del Chaco, a los 19 días del mes de octubre de 2026/);
-  assert.match(texto, /autos caratulados: "Gomez c\/ Escalante"/);
-  assert.match(texto, /se hace presente PEREZ MARIA LAURA, DNI 30\.111\.222, en carácter de Declaración de imputado/);
-  assert.match(texto, /entrega voluntariamente el dispositivo marca Google, modelo Pixel 8, serie 1A2B3C4D5E6F, IMEI 356938035643809/);
-  assert.match(texto, /manipulado solo a los efectos de extraer la evidencia digital/);
-  assert.match(texto, /se instalará una aplicación móvil la cual solo se utilizará a esos efectos/);
-  assert.match(texto, /se procederá a su desinstalación del mismo/);
-  assert.match(texto, /Luego el dispositivo es devuelto a la persona aportante/);
-  assert.match(texto, /No siendo para más, finaliza el acto, previa íntegra lectura efectuada a viva voz por el actuario/);
+  assert.match(texto, /ACTA DE EXTRACCIÓN DE EVIDENCIA DIGITAL/);
+  assert.match(texto, /Expediente N\.º: 12345\/2026-1/);
+  assert.match(texto, /Carátula: Gomez c\/ Escalante/);
+  assert.match(texto, /Fiscalía \/ Dependencia: EQUIPO FISCAL Nº 14/);
+  assert.match(texto, /Lugar y fecha: Resistencia, 19 de octubre de 2026/);
+  assert.match(texto, /siendo las 13:00/);
+  assert.match(texto, /el\/la Sr\.\/Sra\. PEREZ MARIA LAURA, DNI N\.º 30\.111\.222/);
+  assert.match(texto, /del dispositivo móvil marca Google, modelo Pixel 8, serie 1A2B3C4D5E6F, IMEI 356938035643809/);
+  assert.match(texto, /mediante la herramienta SIGEVED/);
+  assert.match(texto, /desactivar la depuración USB y las opciones de desarrollador/);
+  assert.match(texto, /Ley 965-N/);
+  assert.match(texto, /sin que en esta diligencia se obtuvieran archivos digitales/);
+  assert.match(texto, /Firma del funcionario actuante: _+/);
+  assert.match(texto, /Firma del responsable técnico: _+/);
+  assert.match(texto, /Firma del testigo\/aportante: _+/);
+  assert.equal(texto.includes("AVALOS FERNANDEZ JUAN MARCELO"), false);
+});
+
+test("el acta anonimizada no nombra a la persona ni muestra el DNI", () => {
+  const texto = textoActa({ ...data, anonimo: true });
+  assert.match(texto, /aportado voluntariamente por una persona aportante/);
+  assert.match(texto, /marca Google, modelo Pixel 8, serie 1A2B3C4D5E6F, IMEI 356938035643809/);
+  assert.equal(texto.includes("PEREZ MARIA LAURA"), false);
+  assert.equal(texto.includes("30.111.222"), false);
+  assert.equal(texto.includes("Aportante-imputado"), false);
+  assert.match(texto, /No siendo para más, se da por finalizado el acto, previa lectura/);
+  assert.equal(texto.includes("AVALOS FERNANDEZ JUAN MARCELO"), false);
+});
+
+test("el acta deja constancia del motivo cuando no hay foto del DNI", () => {
+  const texto = textoActa({
+    ...data,
+    cause: {
+      ...data.cause,
+      aportante: { ...data.cause.aportante, sinFotoDni: true, motivoSinFoto: "El documento se perdió en un incendio." },
+    },
+  });
+  assert.match(texto, /No se adjunta fotografía del documento nacional de identidad/);
+  assert.match(texto, /Motivo consignado por el operador: El documento se perdió en un incendio/);
 });
 
 test("el acta nombra marca, modelo, serie e IMEI y marca lo que no se pudo leer", () => {
@@ -102,9 +134,11 @@ test("el acta judicial es un Word editable y la firma queda después de la foto"
   writeFileSync(file, docx);
   const xml = execFileSync("tar", ["-xOf", file, "word/document.xml"], { encoding: "utf8" });
   const foto = xml.indexOf("<w:drawing");
-  const firma = xml.indexOf("Firma del compareciente");
+  const firma = xml.indexOf("Firma del testigo/aportante");
   assert.ok(foto > 0);
   assert.ok(firma > foto);
-  assert.match(xml, /Resistencia/);
-  assert.match(xml, /Ante mí/);
+  assert.match(xml, /ACTA DE EXTRACCIÓN DE EVIDENCIA DIGITAL/);
+  assert.match(xml, /Ley 965-N/);
+  assert.match(xml, /Firma del funcionario actuante/);
+  assert.equal(xml.includes("AVALOS FERNANDEZ JUAN MARCELO"), false);
 });
