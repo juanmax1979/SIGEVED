@@ -707,7 +707,7 @@ app.put("/api/cases/:id/aportante", upload.single("foto"), async (req, res) => {
       }
       borrarFotoDni(caseId);
     } else if (temp) {
-      const mensaje = await guardarFotoDni(caseId, temp, String(req.body.dni ?? ""));
+      const mensaje = await guardarFotoDni(caseId, temp);
       if (mensaje) {
         res.status(400).json({ error: mensaje });
         return;

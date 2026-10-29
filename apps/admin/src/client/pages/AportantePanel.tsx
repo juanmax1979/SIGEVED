@@ -12,24 +12,45 @@ import {
 } from "@espejo/shared";
 import { api, stationToken } from "../api";
 
-export function DocumentosAportante({ cause }: { cause: CaseRecord }) {
+export function DocumentosAportante({ cause, mostrarActa = true }: { cause: CaseRecord; mostrarActa?: boolean }) {
   const aportante = normalizarAportante(cause.aportante);
   const identificado = { ...aportante, anonimo: false };
   const conDatos = !errorAportante(identificado) && !errorFotoAportante(identificado);
   const id = cause.id;
+  const pendiente = "Cuando estén el nombre, el DNI, el carácter y la foto o el motivo de su ausencia";
   return (
     <div className="meta">
-      <p>Acta del procedimiento</p>
-      <p>
-        {conDatos ? <a href={`/api/cases/${id}/package/acta`}>Con datos del aportante</a> : "Con datos del aportante, cuando estén el nombre, el DNI, el carácter y la foto o el motivo de su ausencia"}
-        {" · "}
-        <a href={`/api/cases/${id}/package/acta?variante=anonimo`}>Con datos anonimizados</a>
-      </p>
+      {mostrarActa ? (
+        <>
+          <p>Acta del procedimiento</p>
+          <p>
+            {aportante.anonimo ? (
+              <>
+                {conDatos ? <a href={`/api/cases/${id}/package/acta`}>Con datos del aportante</a> : pendiente}
+                {" · "}
+                <a href={`/api/cases/${id}/package/acta?variante=anonimo`}>Con datos anonimizados</a>
+              </>
+            ) : conDatos ? (
+              <a href={`/api/cases/${id}/package/acta`}>Descargar</a>
+            ) : (
+              pendiente
+            )}
+          </p>
+        </>
+      ) : null}
       <p>Consentimiento informado</p>
       <p>
-        {conDatos ? <a href={`/api/cases/${id}/consentimiento`}>Con datos del aportante</a> : "Con datos del aportante, cuando estén el nombre, el DNI, el carácter y la foto o el motivo de su ausencia"}
-        {" · "}
-        <a href={`/api/cases/${id}/consentimiento?variante=anonimo`}>Con datos anonimizados</a>
+        {aportante.anonimo ? (
+          <>
+            {conDatos ? <a href={`/api/cases/${id}/consentimiento`}>Con datos del aportante</a> : pendiente}
+            {" · "}
+            <a href={`/api/cases/${id}/consentimiento?variante=anonimo`}>Con datos anonimizados</a>
+          </>
+        ) : conDatos ? (
+          <a href={`/api/cases/${id}/consentimiento`}>Descargar</a>
+        ) : (
+          pendiente
+        )}
       </p>
     </div>
   );
@@ -80,6 +101,7 @@ export function AportantePanel({
       return URL.createObjectURL(file);
     });
     setError("");
+    setAviso("Revisá que el DNI esté centrado y se vea completo.");
   }
 
   function cancelarEspera() {
@@ -100,7 +122,7 @@ export function AportantePanel({
         body: JSON.stringify({}),
       });
       if (esperaRef.current !== marca) return;
-      setAviso("Se abrió la cámara del teléfono. Encuadrá el DNI, sacá la foto y confirmala en el teléfono.");
+      setAviso("Se abrió la cámara del teléfono. Centrá el DNI en la foto, sacala y confirmala en el teléfono.");
       const limite = Date.now() + 90000;
       while (esperaRef.current === marca && Date.now() < limite) {
         const headers = new Headers();
@@ -132,7 +154,6 @@ export function AportantePanel({
         const extension = tipo.includes("png") ? "png" : "jpg";
         elegir(new File([blob], `dni.${extension}`, { type: tipo }));
         setEsperando(false);
-        setAviso("");
         return;
       }
       if (esperaRef.current === marca) {
@@ -231,7 +252,7 @@ export function AportantePanel({
           </div>
           {fotoGuardada ? <img className="dni-foto" src={fotoGuardada} alt="Foto del DNI del aportante" /> : null}
         </div>
-        <DocumentosAportante cause={cause} />
+        <DocumentosAportante cause={cause} mostrarActa={false} />
       </section>
     );
   }
@@ -286,7 +307,7 @@ export function AportantePanel({
         </label>
       </div>
       <div>
-        <p className="meta">Foto del DNI. Tiene que verse el documento, no otra imagen.</p>
+        <p className="meta">Foto del DNI. Tiene que quedar centrada y verse el documento completo.</p>
         {fotoVisible ? <img className="dni-foto" src={fotoVisible} alt="Foto del DNI del aportante" /> : null}
         <div className="row">
           <button className="btn-ghost" type="button" disabled={esperando || pending} onClick={() => void sacarFoto()}>
@@ -357,10 +378,10 @@ export function AportantePanel({
           </button>
         ) : null}
         <button className="btn" disabled={pending}>
-          {pending ? (archivo && !form.sinFotoDni ? "Verificando la foto del DNI…" : "Guardando…") : "Guardar datos del aportante"}
+          {pending ? "Guardando…" : "Guardar datos del aportante"}
         </button>
       </div>
-      <DocumentosAportante cause={{ ...cause, aportante: form }} />
+      <DocumentosAportante cause={{ ...cause, aportante: form }} mostrarActa={false} />
     </form>
   );
 }
