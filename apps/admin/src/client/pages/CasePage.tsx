@@ -152,6 +152,11 @@ export function CasePage() {
     try {
       const data = await api<{ sha256: string }>(`/api/cases/${id}/package`, { method: "POST" });
       setPackageHash(data.sha256);
+      const descarga = document.createElement("a");
+      descarga.href = `/api/cases/${id}/package/zip`;
+      document.body.appendChild(descarga);
+      descarga.click();
+      descarga.remove();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No se pudo armar el paquete.");
     } finally {
